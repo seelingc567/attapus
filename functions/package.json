@@ -1,0 +1,10 @@
+{
+  "name": "attapus-functions",
+  "engines": { "node": "20" },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^12.6.0",
+    "firebase-functions": "^6.0.1",
+    "cors": "^2.8.5"
+  }
+}
