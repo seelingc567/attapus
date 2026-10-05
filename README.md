@@ -1,74 +1,114 @@
-# Åttapus — deploy from Cloud Shell
+# Åttapus 🐙
 
-## 1. Upload and unzip
-In Cloud Shell, click the **⋮ menu → Upload**, select `attapus-build.zip`, then:
+**A memory and triage layer for anyone juggling several live workstreams across email, chat and meetings.**
 
-```bash
-unzip attapus-build.zip -d attapus
-cd attapus
+Built for the AI Builder Cup 2026 (Future of Work & Enterprise Productivity).
+
+**Live demo:** https://ottapus-demo.web.app
+
+---
+
+## The problem
+
+When work piles up, logging is the first thing people drop, and whatever isn't logged is what quietly goes missing. Logging asks you to decide the project, the category and the format *before* you can write anything down. On an overloaded day, nobody has the capacity for that.
+
+## What Åttapus does
+
+You **paste a message exactly as it arrived** (an email, a chat snippet, a meeting note). No decisions are required. Åttapus then:
+
+1. **Works out which workstream it belongs to.**
+2. **Checks it against what is already on record**, such as open items, closed decisions and due dates.
+3. **Flags what matters** and proposes a next step, which you confirm or dismiss.
+
+It catches two things that routinely slip through:
+
+| Signal | Example |
+|---|---|
+| **Going quiet** | A chaser about an open item that has been silent for 2 days and is due tomorrow. It is flagged *before* it is late. |
+| **Quiet contradiction** | A casual chat message that reopens a decision already marked closed. |
+
+### Try it (signature scenario)
+
+Open the live demo and tap **"The day everything lands at once"**. Three messy messages arrive together, across three projects (Construction, Retail, Marketing Campaign). Åttapus returns:
+
+- the influencer contract flagged **Urgent** (silent for 2 days, due tomorrow),
+- the east-wing tile request flagged as a **Contradiction** with the closed "tile selection" decision,
+- the customer's bulk-quote request marked **Needs reply**.
+
+You can also paste your own text. The demo's stored history is small, so Gemini is judging each message against these workstreams and items.
+
+## How it uses Google Cloud and Gemini
+
+```
+Pasted text ──► Firebase Hosting (web UI)
+                    │  POST /api/classify
+                    ▼
+        Cloud Functions (2nd gen)  ──reads──►  Firestore
+          classifyFragment                     workstreams, items
+                    │
+                    │  prompt = workstreams + items on record
+                    │           + today's date + the pasted fragment
+                    ▼
+            Gemini API (Flash)   ── structured JSON output
+                    │
+                    ▼
+        category · risk · contradicted item · summary · suggested action
+                    │
+                    └──writes──► Firestore (fragments)  ──► review queue in the UI
 ```
 
-## 2. Install the Firebase CLI (one time)
-```bash
-npm install -g firebase-tools
-firebase login --no-localhost
-```
-This prints a URL — open it in a new tab, sign in with the same Google account
-you used for Firebase, and paste the code back into Cloud Shell.
+- **Gemini Flash** classifies each fragment. The function asks for **schema-constrained JSON** (`responseSchema`) so the UI can render results reliably.
+- **Cloud Functions** hold the logic and the API key (stored in Secret Manager, never in the repo).
+- **Firestore** holds workstreams, items and classified fragments. Security rules block all direct client access, so everything goes through the functions.
+- **Firebase Hosting** serves the UI and routes `/api/*` to the functions.
+- **Reliability:** the function retries automatically on Gemini 503 "high demand" errors, and the UI shows a retry card instead of failing silently.
 
-## 3. Confirm the project
-```bash
-firebase use ottapus-demo
+### Why paste instead of a live Outlook/Teams connection?
+
+Connecting to company mail and chat usually means a long IT security review. Pasting works on day one, with no approval and nothing leaving the user's control. Live connectors are a roadmap item, not part of this build.
+
+## What is and isn't built
+
+**Built and working:**
+- Paste capture with multi-item input (separate messages with `---`)
+- Live Gemini classification against stored history, with contradiction and going-quiet detection
+- Review queue with confirm / dismiss, a Workstreams view and a status-update summary
+- Light and dark themes
+
+**Not built yet (honest list):**
+- Screenshot / image ingestion (the tab is there; it is on the roadmap)
+- Persisting confirmed items back to the workstream history
+- Live Outlook / Teams / SharePoint connectors (intentionally out of scope)
+- PowerPoint export of the status update (copy-to-clipboard works today)
+- Vector retrieval for large histories (the demo history is small, so the full history goes into the prompt)
+
+## Project structure
+
+```
+public/index.html        Web UI (single file, no build step)
+functions/index.js       seedDemoData and classifyFragment (Cloud Functions)
+firebase.json            Hosting rewrites: /api/classify, /api/seed
+firestore.rules          Locks Firestore to server-side access only
 ```
 
-## 4. Store your Gemini API key as a secret
-```bash
-firebase functions:secrets:set GEMINI_API_KEY
-```
-Paste your key when prompted. It's stored securely, never in code or git.
+## Run it yourself
 
-## 5. Install function dependencies
-```bash
-cd functions
-npm install
-cd ..
-```
+Prerequisites: a Firebase project on the **Blaze** plan, the Firebase CLI, and a Gemini API key.
 
-## 6. Deploy everything
 ```bash
+# 1. Store the Gemini key as a secret (use a file so the paste can't be mangled)
+firebase functions:secrets:set GEMINI_API_KEY --data-file=key.txt
+
+# 2. Install function dependencies
+cd functions && npm install && cd ..
+
+# 3. Deploy everything
 firebase deploy
+
+# 4. Load the demo data (re-run any time; dates are relative to today)
+#    open https://<your-project>.web.app/api/seed
 ```
-This deploys Firestore rules, both Cloud Functions, and Hosting. It prints
-your live URL at the end, something like:
-`https://ottapus-demo.web.app`
 
-## 7. Seed the demo data (once)
-Open your live URL and tap **Seed demo data** — or visit:
-`https://ottapus-demo.web.app/api/seed`
+## Note on demo data
 
-## 8. Try the signature scenario
-Paste this and tap "Let Åttapus read this":
-> Hey, can we change the tile colour for the east wing? Client mentioned it
-> earlier, shouldn't be a big deal
-
-It should come back classified as **Construction**, category
-**Contradiction**, referencing the seeded `tile-selection` item that was
-logged as closed.
-
-Try the "Silent, due tomorrow" preset too — it should come back flagged
-**at_risk** or **urgent** against the seeded `influencer-contract` item.
-
-## If something fails
-- `firebase deploy` errors mentioning the Blaze plan → the project isn't
-  upgraded yet; do that in the Firebase console first.
-- Gemini errors in the function logs (`firebase functions:log`) → double
-  check the secret was set correctly in step 4.
-- CORS errors in the browser console → make sure you're opening the
-  `.web.app` URL Firebase printed, not `localhost`.
-
-## What's real here vs. what's still a mockup
-This deploys the actual capture → classify → triage pipeline on a real
-Gemini call, which is the piece that matters for the technical-merit score.
-It intentionally does **not** rebuild the full dashboard, morning brief, or
-routing screens — those stay as the polished interactive mockup for the
-demo video. This page is the proof that the reasoning is real.
+The sample workstreams (Construction, Retail, Marketing Campaign) and items are invented for the demo. No real company data is used.
