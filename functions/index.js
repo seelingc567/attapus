@@ -20,6 +20,48 @@ async function fetchWithRetry(url, options, retries = 6, delayMs = 5000) {
   return fetch(url, options);
 }
 
+// Each visitor gets a private sandbox (a random session id kept in their browser)
+// layered on top of the shared seeded demo data, so one judge's tests never leak
+// into another's.
+const SID_RE = /^[A-Za-z0-9_-]{8,64}$/;
+const DOC_RE = /^[A-Za-z0-9]{10,40}$/;
+const MAX_TEXT = 4000;
+const getSid = (v) => (typeof v === "string" && SID_RE.test(v) ? v : "anon");
+const iso = (t) => (t && t.toDate ? t.toDate().toISOString() : null);
+
+// Workstreams + the items Gemini should see: the shared seeded items plus this
+// visitor's own confirmed items. A seeded item that this visitor has reopened
+// is shown as "reopened" so it is no longer treated as a closed decision.
+async function loadContext(sid) {
+  const [wsSnap, itemsSnap] = await Promise.all([
+    db.collection("workstreams").get(),
+    db.collection("items").get(),
+  ]);
+  const workstreams = wsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const all = itemsSnap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .filter((i) => !i.sessionId || i.sessionId === sid);
+  const superseded = new Set(all.filter((i) => i.supersedes).map((i) => i.supersedes));
+  const items = all.map((i) => ({
+    id: i.id,
+    workstreamId: i.workstreamId,
+    title: i.title,
+    status: superseded.has(i.id) ? "reopened" : i.status,
+    summary: i.summary,
+    dueDate: iso(i.dueDate),
+    loggedAt: iso(i.loggedAt),
+  }));
+  return { workstreams, items };
+}
+
+async function deleteRefs(refs) {
+  for (let i = 0; i < refs.length; i += 400) {
+    const b = db.batch();
+    refs.slice(i, i + 400).forEach((r) => b.delete(r));
+    await b.commit();
+  }
+}
+
 // ---------------------------------------------------------------------
 // Seed demo data: three workstreams + two prior items that the
 // signature scenario depends on (a closed item to be quietly reopened,
@@ -55,6 +97,7 @@ exports.seedDemoData = onRequest(async (req, res) => {
           status: "closed",
           loggedAt: twoWeeksAgo,
           dueDate: null,
+          sessionId: null,
         },
         {
           id: "influencer-contract",
@@ -64,6 +107,7 @@ exports.seedDemoData = onRequest(async (req, res) => {
           status: "open",
           loggedAt: twoDaysAgo,
           dueDate: tomorrow,
+          sessionId: null,
         },
       ];
 
@@ -74,7 +118,23 @@ exports.seedDemoData = onRequest(async (req, res) => {
       items.forEach((i) => batch.set(db.collection("items").doc(i.id), i));
       await batch.commit();
 
-      res.status(200).json({ ok: true, workstreams, items });
+      // /api/seed?reset=1 also wipes every visitor's sandbox (their confirmed
+      // items and saved fragments). Handy before recording a demo take.
+      let removed = null;
+      if (req.query.reset === "1") {
+        const [itemsSnap, fragSnap] = await Promise.all([
+          db.collection("items").get(),
+          db.collection("fragments").get(),
+        ]);
+        const refs = [
+          ...itemsSnap.docs.filter((d) => d.data().sessionId).map((d) => d.ref),
+          ...fragSnap.docs.map((d) => d.ref),
+        ];
+        await deleteRefs(refs);
+        removed = refs.length;
+      }
+
+      res.status(200).json({ ok: true, removed, workstreams, items });
     } catch (err) {
       logger.error("seedDemoData failed", err);
       res.status(500).json({ ok: false, error: String(err) });
@@ -96,34 +156,22 @@ exports.classifyFragment = onRequest(
         if (req.method !== "POST") {
           return res.status(405).json({ ok: false, error: "Use POST" });
         }
-        const text = (req.body && req.body.text) || "";
+        const body = req.body || {};
+        const text = typeof body.text === "string" ? body.text : "";
+        const sid = getSid(body.sid);
+        const source = typeof body.source === "string" ? body.source.slice(0, 40) : "";
         if (!text.trim()) {
           return res.status(400).json({ ok: false, error: "Missing 'text'" });
         }
+        if (text.length > MAX_TEXT) {
+          return res
+            .status(400)
+            .json({ ok: false, error: "Text is too long (max " + MAX_TEXT + " characters)" });
+        }
 
-        // Pull current context: what workstreams and items already exist,
-        // so Gemini can link/contradict against real records rather than
-        // guessing blind.
-        const [wsSnap, itemsSnap] = await Promise.all([
-          db.collection("workstreams").get(),
-          db.collection("items").get(),
-        ]);
-        const workstreams = wsSnap.docs.map((d) => ({
-          id: d.id,
-          ...d.data(),
-        }));
-        const items = itemsSnap.docs.map((d) => {
-          const data = d.data();
-          return {
-            id: d.id,
-            workstreamId: data.workstreamId,
-            title: data.title,
-            status: data.status,
-            summary: data.summary,
-            dueDate: data.dueDate ? data.dueDate.toDate().toISOString() : null,
-            loggedAt: data.loggedAt && data.loggedAt.toDate ? data.loggedAt.toDate().toISOString() : null,
-          };
-        });
+        // Current context: the workstreams and items on record (shared seed +
+        // this visitor's own), so Gemini can link or contradict real records.
+        const { workstreams, items } = await loadContext(sid);
 
         const schema = {
           type: "OBJECT",
@@ -182,7 +230,6 @@ Rules:
 - If nothing matches an existing item, contradictsItemId is an empty string.
 - Keep summary and suggestedAction short and concrete, no more than one sentence each.`;
 
-    logger.info("KEY LENGTH: " + GEMINI_API_KEY.value().length);
         const resp = await fetchWithRetry(
           `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY.value()}`,
           {
@@ -226,6 +273,9 @@ Rules:
           risk: parsed.risk,
           contradictsItemId: parsed.contradictsItemId || null,
           suggestedAction: parsed.suggestedAction,
+          source,
+          sessionId: sid,
+          status: "pending",
           createdAt: admin.firestore.Timestamp.now(),
         };
 
@@ -244,3 +294,130 @@ Rules:
     });
   }
 );
+
+// ---------------------------------------------------------------------
+// getState: everything the UI needs to restore a visitor's sandbox after a
+// refresh - workstreams, items on record (seed + their own) and their
+// pending / confirmed fragments.
+// ---------------------------------------------------------------------
+exports.getState = onRequest(async (req, res) => {
+  cors(req, res, async () => {
+    try {
+      const sid = getSid(req.query.sid);
+      const [{ workstreams, items }, fragSnap] = await Promise.all([
+        loadContext(sid),
+        db.collection("fragments").where("sessionId", "==", sid).get(),
+      ]);
+      const fragments = fragSnap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((f) => f.status === "pending" || f.status === "confirmed")
+        .map((f) => ({ ...f, createdAt: iso(f.createdAt), resolvedAt: iso(f.resolvedAt) }))
+        .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))
+        .slice(-50);
+      res.status(200).json({ ok: true, workstreams, items, fragments });
+    } catch (err) {
+      logger.error("getState failed", err);
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+});
+
+// ---------------------------------------------------------------------
+// resolveFragment: the user's decision on a proposed item.
+//   confirm -> the fragment becomes part of the visitor's memory (a new item
+//              on record); a confirmed contradiction reopens the closed item.
+//   dismiss -> the fragment is set aside.
+// ---------------------------------------------------------------------
+exports.resolveFragment = onRequest(async (req, res) => {
+  cors(req, res, async () => {
+    try {
+      if (req.method !== "POST") {
+        return res.status(405).json({ ok: false, error: "Use POST" });
+      }
+      const { id, action } = req.body || {};
+      const sid = getSid((req.body || {}).sid);
+      if (!DOC_RE.test(String(id || "")) || !["confirm", "dismiss"].includes(action)) {
+        return res.status(400).json({ ok: false, error: "Bad request" });
+      }
+      // Optional human corrections made before confirming: the proposed action
+      // text and/or the workstream the fragment was filed under.
+      const edits = (req.body || {}).edits || {};
+      let editedAction = null;
+      let editedWs = null;
+      if (action === "confirm") {
+        if (edits.action !== undefined) {
+          const a = typeof edits.action === "string" ? edits.action.trim() : "";
+          if (!a || a.length > 300) {
+            return res.status(400).json({ ok: false, error: "Proposed action must be 1-300 characters" });
+          }
+          editedAction = a;
+        }
+        if (edits.workstreamId !== undefined) {
+          const w = String(edits.workstreamId);
+          const wsDoc = DOC_RE.test(w) || /^[a-z0-9_-]{2,40}$/.test(w) ? await db.collection("workstreams").doc(w).get() : null;
+          if (!wsDoc || !wsDoc.exists) {
+            return res.status(400).json({ ok: false, error: "Unknown workstream" });
+          }
+          editedWs = w;
+        }
+      }
+      const ref = db.collection("fragments").doc(String(id));
+      const snap = await ref.get();
+      if (!snap.exists) return res.status(404).json({ ok: false, error: "Not found" });
+      const f = snap.data();
+      if (f.sessionId !== sid) return res.status(403).json({ ok: false, error: "Not yours" });
+      if (f.status !== "pending") {
+        return res.status(200).json({ ok: true, status: f.status, already: true });
+      }
+
+      const now = admin.firestore.Timestamp.now();
+      if (action === "dismiss") {
+        await ref.update({ status: "dismissed", resolvedAt: now });
+        return res.status(200).json({ ok: true, status: "dismissed" });
+      }
+
+      const finalAction = editedAction || f.suggestedAction || f.summary || "";
+      const finalWs = editedWs || f.workstreamId;
+      const itemRef = db.collection("items").doc();
+      const item = {
+        sessionId: sid,
+        workstreamId: finalWs,
+        title: String(f.summary || "Logged item").slice(0, 90),
+        summary: finalAction,
+        status: f.category === "log_only" ? "closed" : "open",
+        loggedAt: now,
+        dueDate: null,
+        sourceFragmentId: id,
+        supersedes: f.contradictsItemId || null,
+      };
+      const batch = db.batch();
+      const fragUpdate = { status: "confirmed", resolvedAt: now, itemId: itemRef.id };
+      if (editedAction || editedWs) {
+        fragUpdate.edited = true;
+        fragUpdate.suggestedAction = finalAction;
+        fragUpdate.workstreamId = finalWs;
+      }
+      batch.update(ref, fragUpdate);
+      batch.set(itemRef, item);
+      await batch.commit();
+
+      res.status(200).json({
+        ok: true,
+        status: "confirmed",
+        item: {
+          id: itemRef.id,
+          workstreamId: item.workstreamId,
+          title: item.title,
+          summary: item.summary,
+          status: item.status,
+          loggedAt: iso(now),
+          dueDate: null,
+        },
+        reopened: item.supersedes,
+      });
+    } catch (err) {
+      logger.error("resolveFragment failed", err);
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+});

@@ -148,7 +148,8 @@
   .empty i { font-size:28px; color:var(--brand-hi); margin-bottom:10px; display:block; }
   .empty b { display:block; color:var(--text); margin-bottom:4px; font-size:14px; }
 
-  .q-card { background:var(--card); border:1px solid var(--line); border-left:4px solid var(--brand); border-radius:16px; padding:14px 16px; box-shadow:var(--shadow); animation:in .35s ease-out; }
+  .q-card { background:var(--card); border:1px solid var(--line); border-left:4px solid var(--brand); border-radius:16px; padding:14px 16px; box-shadow:var(--shadow); }
+  .q-card.enter { animation:in .35s ease-out; }
   .q-card.risk { border-left-color:var(--amber); }
   .q-card.contradiction { border-left-color:var(--rose); }
   .q-card.decision { border-left-color:var(--cyan); }
@@ -173,6 +174,11 @@
   .q-btns { display:flex; gap:8px; }
   .b-ghost { font-size:12px; padding:7px 12px; border-radius:9px; background:var(--surface-2); border:1px solid var(--line); color:var(--muted); }
   .b-ok { font-size:12px; font-weight:700; padding:7px 14px; border-radius:9px; background:var(--green); border:none; color:#fff; display:inline-flex; gap:6px; align-items:center; }
+  .edit-wrap { display:flex; flex-direction:column; gap:8px; flex:1 1 280px; }
+  .edit-wrap label { font-size:11px; font-weight:700; color:var(--muted); letter-spacing:.02em; }
+  .edit-wrap textarea { min-height:68px; font-family:'Plus Jakarta Sans', system-ui, sans-serif; font-size:12.5px; line-height:1.45; }
+  .edit-wrap select { padding:8px 10px; border-radius:10px; background:var(--input); border:1px solid var(--line); color:var(--text); font-family:inherit; font-size:12.5px; }
+  .edited-tag { font-size:10px; font-weight:700; margin-left:6px; padding:1px 7px; border-radius:6px; background:var(--brand-soft); color:var(--brand-text); }
   .b-retry { font-size:12px; font-weight:700; padding:7px 14px; border-radius:9px; background:var(--brand); border:none; color:var(--on-brand); }
 
   .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; margin-top:24px; padding-top:20px; border-top:1px solid var(--line); }
@@ -292,7 +298,7 @@
       </button>
     </div>
 
-    <div class="trust"><i class="fa-solid fa-user-shield"></i><span>Åttapus proposes — you confirm every item.</span></div>
+    <div class="trust"><i class="fa-solid fa-user-shield"></i><span>Åttapus proposes — you confirm every item.</span><button class="b-ghost" style="margin-left:auto" onclick="resetSession()" title="Clear your session and start fresh">Start over</button></div>
   </aside>
 
   <!-- ============ RIGHT: lens ============ -->
@@ -312,11 +318,7 @@
           <div><h3 id="briefTitle">Morning brief</h3><p>Pushed to you before you open your inbox — you didn't have to ask.</p></div>
           <button class="x" onclick="toggleBrief()" aria-label="Close brief"><i class="fa-solid fa-xmark"></i></button>
         </div>
-        <div class="brief-grid">
-          <div class="brief-cell"><b style="color:var(--amber-text)"><i class="fa-solid fa-flag"></i> Needs you first</b>Influencer contract — Marketing Campaign. Silent for 2 days, due tomorrow.</div>
-          <div class="brief-cell"><b style="color:var(--rose-text)"><i class="fa-solid fa-lock"></i> Watch for reopens</b>Tile selection — Construction. Closed 2 weeks ago; any new ask should be checked against it.</div>
-          <div class="brief-cell"><b style="color:var(--green-text)"><i class="fa-solid fa-list-check"></i> Everything else</b>Nothing else is overdue. Retail has no open items on record.</div>
-        </div>
+        <div class="brief-grid" id="briefGrid"></div>
       </div>
 
       <div class="sec-head">
@@ -397,6 +399,18 @@ let activeSrc = 'Outlook email';
 let queue = [];            // pending items awaiting the user's confirmation
 let captured = [];         // everything read this session (for workstream view + stats)
 let busy = false;
+let items = null;          // items on record, loaded from the server (null = not loaded yet)
+
+// Each visitor gets a private sandbox, identified by a random id kept in this browser.
+function newSid() {
+  const a = new Uint8Array(12);
+  (window.crypto || window.msCrypto).getRandomValues(a);
+  return 'v' + Array.from(a, b => b.toString(36).padStart(2, '0')).join('');
+}
+let sid = (function () {
+  try { let v = localStorage.getItem('attapus-sid'); if (!v) { v = newSid(); localStorage.setItem('attapus-sid', v); } return v; }
+  catch (e) { return newSid(); }
+})();
 
 /* ============ Tiny DOM helper (model output is always set as text, never HTML) ============ */
 function h(tag, cls, text, attrs) {
@@ -488,13 +502,13 @@ function kindOf(r) {
 }
 
 /* ============ Calling the live backend ============ */
-async function classify(text) {
+async function classify(text, source) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 60000);   // backend may retry Gemini 503s for ~30s
   try {
     const resp = await fetch('/api/classify', {
       method:'POST', headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ text }), signal: controller.signal
+      body: JSON.stringify({ text, sid, source }), signal: controller.signal
     });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data.ok) throw new Error(data.error || ('HTTP ' + resp.status));
@@ -526,7 +540,7 @@ async function runCapture() {
   status.classList.add('on');
   const slow = setTimeout(() => { status.textContent = 'Still reading — Gemini is busy, retrying automatically…'; }, 8000);
 
-  const results = await Promise.allSettled(blocks.map(b => classify(b.text)));
+  const results = await Promise.allSettled(blocks.map(b => classify(b.text, b.src)));
 
   const fresh = [];
   results.forEach((res, i) => {
@@ -534,7 +548,7 @@ async function runCapture() {
     if (res.status === 'fulfilled') {
       const r = res.value, k = kindOf(r);
       const item = {
-        id: 'i' + Date.now() + '-' + i, ws: wsKey(r.workstreamId), wsLabel: wsLabel(r.workstreamId),
+        id: r.id || ('i' + Date.now() + '-' + i), ws: wsKey(r.workstreamId), wsLabel: wsLabel(r.workstreamId),
         kind: k, title: r.summary || 'Fragment read', snippet: b.text, action: r.suggestedAction || '',
         conflict: r.contradictsItemId ? prettyId(r.contradictsItemId) : '', src: b.src,
         risk: r.risk, at: new Date()
@@ -584,11 +598,12 @@ function itemCard(it) {
     return card;
   }
   const k = it.kind;
-  const card = h('div', 'q-card ' + k.k);
+  const card = h('div', 'q-card ' + k.k + (it.seen ? '' : ' enter'));
+  it.seen = true;
   const top = h('div', 'q-top');
   const tags = h('div', 'q-tags');
   tags.append(h('span', 'badge mono ' + k.tag, k.label), h('span', 'ws', '· ' + it.wsLabel));
-  top.append(tags, h('span', 'when mono', 'Just now · ' + it.src + ' · ' + timeStr(it.at)));
+  top.append(tags, h('span', 'when mono', (Date.now() - it.at < 120000 ? 'Just now' : 'Earlier') + ' · ' + it.src + ' · ' + timeStr(it.at)));
   card.append(top, h('div', 'q-title', it.title));
 
   if (k.k === 'contradiction') {
@@ -606,23 +621,81 @@ function itemCard(it) {
   card.append(h('div', 'snippet', '"' + it.snippet + '"'));
 
   const foot = h('div', 'q-foot');
-  const act = h('div', 'q-action'); act.append(h('i', 'fa-solid fa-robot'));
-  const at = h('span'); at.append(h('b', null, 'Proposed: '), document.createTextNode(it.action || 'Log it to the workstream.'));
-  act.append(at);
+  const shownAction = it.draftAction !== undefined ? it.draftAction : it.action;
+  let act;
+  if (it.editing) {
+    act = h('div', 'edit-wrap');
+    const l1 = h('label', null, 'PROPOSED ACTION'); l1.htmlFor = 'ea-' + it.id;
+    const ta = h('textarea'); ta.id = 'ea-' + it.id; ta.maxLength = 300; ta.value = shownAction || '';
+    ta.oninput = () => { it.draftAction = ta.value; };
+    const l2 = h('label', null, 'WORKSTREAM'); l2.htmlFor = 'ew-' + it.id;
+    const sel = h('select'); sel.id = 'ew-' + it.id;
+    if (!it.ws) sel.append(h('option', null, 'Unsorted', { value:'' }));
+    WS_ORDER.forEach(k => sel.append(h('option', null, WORKSTREAMS[k].name, { value:k })));
+    sel.value = (it.draftWs !== undefined ? it.draftWs : it.ws) || '';
+    sel.onchange = () => { it.draftWs = sel.value; };
+    act.append(l1, ta, l2, sel);
+  } else {
+    act = h('div', 'q-action'); act.append(h('i', 'fa-solid fa-robot'));
+    const at = h('span'); at.append(h('b', null, 'Proposed: '), document.createTextNode(shownAction || 'Log it to the workstream.'));
+    const wsChanged = it.draftWs !== undefined && (it.draftWs || null) !== (it.ws || null);
+    if ((it.draftAction !== undefined && it.draftAction !== it.action) || wsChanged) at.append(h('span', 'edited-tag', 'edited'));
+    act.append(at);
+  }
   const btns = h('div', 'q-btns');
-  const ok = h('button', 'b-ok'); ok.append(h('i', 'fa-solid fa-check'), document.createTextNode('Confirm'));
+  const ok = h('button', 'b-ok'); ok.disabled = !!it.saving; ok.append(h('i', 'fa-solid fa-check'), document.createTextNode(it.saving ? 'Saving…' : 'Confirm'));
   ok.onclick = () => resolve(it.id, true);
-  btns.append(h('button', 'b-ghost', 'Dismiss', { onclick:() => resolve(it.id, false) }), ok);
+  btns.append(
+    h('button', 'b-ghost', 'Dismiss', { onclick:() => resolve(it.id, false), disabled: !!it.saving }),
+    h('button', 'b-ghost', it.editing ? 'Done' : 'Edit', { onclick:() => toggleEdit(it.id), disabled: !!it.saving }),
+    ok
+  );
   foot.append(act, btns);
   card.append(foot);
   return card;
 }
 
-function resolve(id, confirmed) {
+function toggleEdit(id) {
   const it = queue.find(q => q.id === id);
-  queue = queue.filter(q => q.id !== id);
+  if (!it || it.saving) return;
+  if (!it.editing && it.draftAction === undefined) { it.draftAction = it.action; it.draftWs = it.ws || ''; }
+  it.editing = !it.editing;
   renderAll();
-  toast(confirmed ? `Confirmed: ${it ? it.title : 'item'}` : 'Dismissed');
+}
+
+async function resolve(id, confirmed) {
+  const it = queue.find(q => q.id === id);
+  if (!it || it.saving) return;
+  it.saving = true; it.editing = false; renderAll();
+  // Corrections the user made before confirming (only sent if something actually changed).
+  const edits = {};
+  if (confirmed) {
+    const a = (it.draftAction || '').trim();
+    if (it.draftAction !== undefined && a && a !== it.action) edits.action = a;
+    if (it.draftWs && it.draftWs !== it.ws) edits.workstreamId = it.draftWs;
+  }
+  try {
+    const resp = await fetch('/api/resolve', {
+      method:'POST', headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ sid, id, action: confirmed ? 'confirm' : 'dismiss', edits })
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.ok) throw new Error(data.error || ('HTTP ' + resp.status));
+    queue = queue.filter(q => q.id !== id);
+    if (confirmed) {
+      if (edits.action) it.action = edits.action;
+      if (edits.workstreamId) { it.ws = edits.workstreamId; it.wsLabel = WORKSTREAMS[edits.workstreamId].name; }
+      if (items && data.item && !items.some(i => i.id === data.item.id)) items.push(data.item);
+      if (items && data.reopened) items.forEach(i => { if (i.id === data.reopened) i.status = 'reopened'; });
+    } else {
+      captured = captured.filter(c => c.id !== id);   // dismissed: no longer counts toward the workstream
+    }
+    renderAll();
+    toast(confirmed ? 'Saved to memory: ' + it.title : 'Dismissed');
+  } catch (err) {
+    it.saving = false; renderAll();
+    toast('Could not save that — please try again');
+  }
 }
 
 function retry(errItem) {
@@ -653,6 +726,7 @@ function renderAll() {
   $('sCaughtT').textContent = caught.length ? caught[0].title : 'Nothing flagged yet';
 
   renderWorkstreams();
+  renderBrief();
 }
 
 function wsStatus(key) {
@@ -679,7 +753,11 @@ function renderWorkstreams() {
 
     const grid = h('div', 'grid2');
     const onRecord = h('div', 'box'); onRecord.append(h('h4', null, 'On record'));
-    if (w.seeded.length) w.seeded.forEach(([a, b]) => { const r = h('div', 'li'); r.append(h('span', null, a), h('span', 'mono', b)); onRecord.append(r); });
+    const recs = items ? items.filter(i => wsKey(i.workstreamId) === key) : null;
+    if (recs) {
+      if (recs.length) recs.forEach(i => { const r = h('div', 'li'); r.append(h('span', null, i.title), h('span', 'mono', recLabel(i))); onRecord.append(r); });
+      else onRecord.append(h('div', 'none', 'No items on record'));
+    } else if (w.seeded.length) w.seeded.forEach(([a, b]) => { const r = h('div', 'li'); r.append(h('span', null, a), h('span', 'mono', b)); onRecord.append(r); });
     else onRecord.append(h('div', 'none', 'No open items on record'));
     const recent = h('div', 'box'); recent.append(h('h4', null, 'Captured this session (' + mine.length + ')'));
     if (mine.length) mine.slice(0, 4).forEach(c => { const r = h('div', 'li'); r.append(h('span', null, c.title), h('span', 'mono', c.kind.label)); recent.append(r); });
@@ -688,6 +766,67 @@ function renderWorkstreams() {
     card.append(grid);
     list.append(card);
   });
+}
+
+/* ============ Items on record, morning brief, session restore ============ */
+function daysAgo(iso) { return Math.floor((Date.now() - new Date(iso)) / 864e5); }
+function recLabel(i) {
+  if (i.status === 'closed') { const d = daysAgo(i.loggedAt); return d >= 14 ? 'closed ' + Math.round(d / 7) + ' wks ago' : d <= 0 ? 'closed today' : 'closed ' + d + 'd ago'; }
+  if (i.status === 'reopened') return 'reopened';
+  if (i.dueDate) { const d = Math.ceil((new Date(i.dueDate) - Date.now()) / 864e5); return d < 0 ? 'overdue' : d === 0 ? 'due today' : d === 1 ? 'due tomorrow' : 'due in ' + d + 'd'; }
+  return i.status;
+}
+function renderBrief() {
+  const g = $('briefGrid'); g.replaceChildren();
+  const cell = (color, icon, title, text) => {
+    const c = h('div', 'brief-cell');
+    const b = h('b'); b.style.color = color; b.append(h('i', 'fa-solid ' + icon), document.createTextNode(' ' + title));
+    c.append(b, document.createTextNode(text)); g.append(c);
+  };
+  if (!items) { cell('var(--muted)', 'fa-circle-info', 'Brief unavailable', 'The items on record could not be loaded.'); return; }
+  const nameOf = i => wsLabel(i.workstreamId);
+  const open = items.filter(i => i.status === 'open');
+  const needs = open.filter(i => (i.dueDate && new Date(i.dueDate) - Date.now() < 2 * 864e5) || daysAgo(i.loggedAt) >= 2)
+    .sort((a, b) => new Date(a.dueDate || a.loggedAt) - new Date(b.dueDate || b.loggedAt));
+  const watch = items.filter(i => i.status === 'closed').slice(0, 2);
+  const line = i => {
+    const bits = [], d = daysAgo(i.loggedAt);
+    if (d >= 1) bits.push('silent for ' + d + ' day' + (d > 1 ? 's' : ''));
+    if (i.dueDate) bits.push(recLabel(i));
+    return i.title + ' — ' + nameOf(i) + (bits.length ? '. ' + bits.join(', ').replace(/^./, c => c.toUpperCase()) + '.' : '.');
+  };
+  cell('var(--amber-text)', 'fa-flag', 'Needs you first', needs.length ? needs.slice(0, 2).map(line).join(' ') : 'Nothing is close to its deadline.');
+  cell('var(--rose-text)', 'fa-lock', 'Watch for reopens', watch.length ? watch.map(i => i.title + ' — ' + nameOf(i) + '. ' + recLabel(i).replace(/^./, c => c.toUpperCase()) + '; any new ask is checked against it.').join(' ') : 'No closed decisions on record.');
+  const rest = open.length - needs.length;
+  cell('var(--green-text)', 'fa-list-check', 'Everything else', rest > 0 ? rest + ' other open item' + (rest > 1 ? 's' : '') + ' on record.' : 'Nothing else is open.');
+}
+function fragToItem(f) {
+  return {
+    id: f.id, ws: wsKey(f.workstreamId), wsLabel: wsLabel(f.workstreamId), kind: kindOf(f),
+    title: f.summary || 'Fragment read', snippet: f.rawText || '', action: f.suggestedAction || '',
+    conflict: f.contradictsItemId ? prettyId(f.contradictsItemId) : '', src: f.source || 'Pasted',
+    risk: f.risk, at: new Date(f.createdAt || Date.now()), status: f.status
+  };
+}
+// Restore this visitor's session (pending queue + what is on record) from the server.
+async function loadState() {
+  try {
+    const resp = await fetch('/api/state?sid=' + encodeURIComponent(sid));
+    const data = await resp.json();
+    if (!resp.ok || !data.ok) throw new Error(data.error || 'state');
+    items = data.items;
+    const frs = data.fragments.map(fragToItem).reverse();      // newest first
+    captured = frs.slice();
+    queue = frs.filter(f => f.status === 'pending');
+  } catch (e) { items = null; }
+  renderAll();
+}
+function resetSession() {
+  sid = newSid();
+  try { localStorage.setItem('attapus-sid', sid); } catch (e) {}
+  queue = []; captured = []; $('input').value = '';
+  loadState();
+  toast('Started a fresh session');
 }
 
 /* ============ Status update ============ */
@@ -728,6 +867,7 @@ async function copyDeck() {
 }
 
 renderAll();
+loadState();
 </script>
 </body>
 </html>

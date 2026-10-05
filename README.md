@@ -63,6 +63,17 @@ Pasted text ──► Firebase Hosting (web UI)
 - **Firebase Hosting** serves the UI and routes `/api/*` to the functions.
 - **Reliability:** the function retries automatically on Gemini 503 "high demand" errors, and the UI shows a retry card instead of failing silently.
 
+### A private sandbox for every visitor
+
+The seeded demo history is shared, but everything a visitor does on top of it (their pasted messages, confirmed items, reopened decisions) lives in a private sandbox identified by a random id kept in their browser. One judge's tests never affect another's, and **Start over** gives a clean slate. The shared seeded items are never modified.
+
+| Endpoint | What it does |
+|---|---|
+| `POST /api/classify` | Reads a pasted fragment against the visitor's context and returns the proposal |
+| `POST /api/resolve` | Confirm (save to memory) or dismiss a proposal |
+| `GET /api/state` | Restores the visitor's queue and the items on record |
+| `GET /api/seed` | (Re)loads the demo data; `?reset=1` also wipes every visitor sandbox |
+
 ### Why paste instead of a live Outlook/Teams connection?
 
 Connecting to company mail and chat usually means a long IT security review. Pasting works on day one, with no approval and nothing leaving the user's control. Live connectors are a roadmap item, not part of this build.
@@ -72,12 +83,15 @@ Connecting to company mail and chat usually means a long IT security review. Pas
 **Built and working:**
 - Paste capture with multi-item input (separate messages with `---`)
 - Live Gemini classification against stored history, with contradiction and going-quiet detection
-- Review queue with confirm / dismiss, a Workstreams view and a status-update summary
+- Review queue with **Confirm / Dismiss that saves to Firestore**: a confirmed item joins the history Gemini checks next time, and a confirmed contradiction reopens the closed decision
+- **Edit before you confirm**: correct the proposed action or the workstream Gemini picked, then save the corrected version
+- **Your session survives a refresh**: the pending queue and what is on record are restored from the database
+- A **morning brief generated from the items on record** (what is close to its deadline, which closed decisions to watch), not hard-coded text
+- Workstreams view and a copy-to-clipboard status update
 - Light and dark themes
 
 **Not built yet (honest list):**
 - Screenshot / image ingestion (the tab is there; it is on the roadmap)
-- Persisting confirmed items back to the workstream history
 - Live Outlook / Teams / SharePoint connectors (intentionally out of scope)
 - PowerPoint export of the status update (copy-to-clipboard works today)
 - Vector retrieval for large histories (the demo history is small, so the full history goes into the prompt)
@@ -106,7 +120,7 @@ cd functions && npm install && cd ..
 firebase deploy
 
 # 4. Load the demo data (re-run any time; dates are relative to today)
-#    open https://<your-project>.web.app/api/seed
+#    open https://<your-project>.web.app/api/seed?reset=1
 ```
 
 ## Note on demo data
