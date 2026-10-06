@@ -71,6 +71,7 @@ The seeded demo history is shared, but everything a visitor does on top of it (t
 |---|---|
 | `POST /api/classify` | Reads a pasted fragment against the visitor's context and returns the proposal |
 | `POST /api/resolve` | Confirm (save to memory) or dismiss a proposal |
+| `POST /api/complete` | Mark an open item done (or undo) |
 | `GET /api/state` | Restores the visitor's queue and the items on record |
 | `GET /api/seed` | (Re)loads the demo data; `?reset=1` also wipes every visitor sandbox |
 
@@ -87,6 +88,7 @@ Connecting to company mail and chat usually means a long IT security review. Pas
 - **Edit before you confirm**: correct the proposed action or the workstream Gemini picked, then save the corrected version
 - **Your session survives a refresh**: the pending queue and what is on record are restored from the database
 - A **morning brief generated from the items on record** (what is close to its deadline, which closed decisions to watch), not hard-coded text
+- **Status tab**: pending / open / done / dismissed counts per workstream, an **Open actions** list with *Mark done* (and *View original message*), and a **filterable history** of every message showing what happened to it (confirmed, edited, dismissed, done), including the original proposal next to your edited version
 - Workstreams view and a copy-to-clipboard status update
 - Light and dark themes
 

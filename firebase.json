@@ -22,6 +22,10 @@
       {
         "source": "/api/resolve",
         "function": "resolveFragment"
+      },
+      {
+        "source": "/api/complete",
+        "function": "completeItem"
       }
     ]
   },

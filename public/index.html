@@ -219,6 +219,39 @@
   .toast.on { transform:none; opacity:1; }
   .toast i { color:var(--green); }
 
+  /* ---------- Status tab ---------- */
+  .t-muted { background:var(--surface-2); color:var(--muted); }
+  .sum-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:14px; }
+  .sum { padding:12px 14px; border-radius:14px; background:var(--card); border:1px solid var(--line); }
+  .sum b { display:block; font-size:24px; font-weight:800; line-height:1.1; }
+  .sum small { font-size:11.5px; color:var(--muted); }
+  .wsum { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:10px; }
+  .wsum .box h4 { display:flex; align-items:center; gap:8px; color:var(--text); font-size:13px; }
+  .wsum .box h4 .badge { margin-left:auto; }
+  .mini { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; text-align:center; margin-top:10px; }
+  .mini div { font-size:10.5px; color:var(--muted); }
+  .mini b { display:block; font-size:17px; color:var(--text); }
+  .sub-head { display:flex; justify-content:space-between; align-items:center; gap:10px; margin:24px 0 10px; }
+  .sub-head h3 { font-size:14px; font-weight:800; display:flex; gap:8px; align-items:center; }
+  .sub-head h3 i { color:var(--brand-hi); }
+  .sub-head small { font-size:11px; color:var(--faint); }
+  .act-row, .hist-row { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin-bottom:8px; }
+  .hist-row { cursor:pointer; }
+  .hist-row:hover { border-color:var(--brand); }
+  .row-top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+  .row-main { min-width:0; flex:1; }
+  .row-tags { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:5px; }
+  .row-title { font-size:13.5px; font-weight:700; }
+  .row-meta { font-size:11.5px; color:var(--muted); margin-top:3px; }
+  .link-btn { background:none; border:none; padding:0; margin-top:6px; color:var(--brand-text); font-size:11.5px; font-weight:600; text-decoration:underline; }
+  .row-detail { margin-top:10px; padding-top:10px; border-top:1px solid var(--line); font-size:12.5px; color:var(--text); }
+  .row-detail .lbl { display:block; font-size:10.5px; font-weight:700; letter-spacing:.04em; color:var(--faint); margin:8px 0 4px; }
+  .row-detail .lbl:first-child { margin-top:0; }
+  .row-detail .snippet { margin-bottom:0; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+  .chip-f { font-size:11.5px; font-weight:600; padding:5px 11px; border-radius:99px; border:1px solid var(--line); background:var(--surface-2); color:var(--muted); }
+  .chip-f.active { background:var(--brand-soft); color:var(--brand-text); border-color:color-mix(in srgb, var(--brand) 45%, transparent); }
+
   /* ---------- Responsive: iPad portrait / phone ---------- */
   @media (max-width: 900px) {
     body { overflow:auto; display:block; }
@@ -307,6 +340,7 @@
       <div class="lens-tabs">
         <button class="lens-tab active" id="lt-today" onclick="lens('today')"><i class="fa-solid fa-compass"></i>Today <span class="count mono" id="badge">0</span></button>
         <button class="lens-tab" id="lt-ws" onclick="lens('ws')"><i class="fa-solid fa-folder-tree"></i>Workstreams</button>
+        <button class="lens-tab" id="lt-status" onclick="lens('status')"><i class="fa-solid fa-chart-simple"></i>Status</button>
       </div>
       <button class="btn" onclick="toggleBrief()"><i class="fa-solid fa-mug-hot"></i><span class="lbl" id="briefLbl">Morning brief</span></button>
     </div>
@@ -347,6 +381,17 @@
         <button class="btn" onclick="openDeck()"><i class="fa-solid fa-wand-magic-sparkles"></i><span>Generate status update</span></button>
       </div>
       <div id="wsList"></div>
+    </section>
+
+    <!-- STATUS -->
+    <section class="panel" id="p-status">
+      <div class="sec-head">
+        <div>
+          <h2><i class="fa-solid fa-chart-simple"></i> Status</h2>
+          <p>Where everything stands: what is waiting for you, what is open, what is done, and how it got there.</p>
+        </div>
+      </div>
+      <div id="statusRoot"></div>
     </section>
   </main>
 </div>
@@ -400,6 +445,11 @@ let queue = [];            // pending items awaiting the user's confirmation
 let captured = [];         // everything read this session (for workstream view + stats)
 let busy = false;
 let items = null;          // items on record, loaded from the server (null = not loaded yet)
+let history = [];          // every message this session, whatever happened to it
+let histFilter = 'all';
+let actFilter = 'all';
+let showDone = false;
+const openRows = new Set();
 
 // Each visitor gets a private sandbox, identified by a random id kept in this browser.
 function newSid() {
@@ -453,10 +503,10 @@ function preset(key, el) {
   $('input').value = PRESETS[key];
 }
 function lens(which) {
-  $('lt-today').classList.toggle('active', which === 'today');
-  $('lt-ws').classList.toggle('active', which === 'ws');
-  $('p-today').classList.toggle('on', which === 'today');
-  $('p-ws').classList.toggle('on', which === 'ws');
+  [['today', 'lt-today', 'p-today'], ['ws', 'lt-ws', 'p-ws'], ['status', 'lt-status', 'p-status']].forEach(([k, t, pn]) => {
+    $(t).classList.toggle('active', which === k);
+    $(pn).classList.toggle('on', which === k);
+  });
 }
 function toggleBrief() {
   const on = $('brief').classList.toggle('on');
@@ -551,9 +601,9 @@ async function runCapture() {
         id: r.id || ('i' + Date.now() + '-' + i), ws: wsKey(r.workstreamId), wsLabel: wsLabel(r.workstreamId),
         kind: k, title: r.summary || 'Fragment read', snippet: b.text, action: r.suggestedAction || '',
         conflict: r.contradictsItemId ? prettyId(r.contradictsItemId) : '', src: b.src,
-        risk: r.risk, at: new Date()
+        risk: r.risk, at: new Date(), status: 'pending'
       };
-      captured.unshift(item);
+      captured.unshift(item); history.unshift(item);
       fresh.push({ item });
     } else {
       fresh.push({ error: String(res.reason && res.reason.message || res.reason), block: b });
@@ -683,12 +733,14 @@ async function resolve(id, confirmed) {
     if (!resp.ok || !data.ok) throw new Error(data.error || ('HTTP ' + resp.status));
     queue = queue.filter(q => q.id !== id);
     if (confirmed) {
-      if (edits.action) it.action = edits.action;
+      if (edits.action) { it.originalAction = it.action; it.action = edits.action; }
       if (edits.workstreamId) { it.ws = edits.workstreamId; it.wsLabel = WORKSTREAMS[edits.workstreamId].name; }
+      it.status = 'confirmed'; it.resolvedAt = new Date(); it.edited = !!(edits.action || edits.workstreamId); it.itemId = data.item ? data.item.id : null;
       if (items && data.item && !items.some(i => i.id === data.item.id)) items.push(data.item);
       if (items && data.reopened) items.forEach(i => { if (i.id === data.reopened) i.status = 'reopened'; });
     } else {
       captured = captured.filter(c => c.id !== id);   // dismissed: no longer counts toward the workstream
+      it.status = 'dismissed'; it.resolvedAt = new Date();
     }
     renderAll();
     toast(confirmed ? 'Saved to memory: ' + it.title : 'Dismissed');
@@ -727,6 +779,7 @@ function renderAll() {
 
   renderWorkstreams();
   renderBrief();
+  renderStatus();
 }
 
 function wsStatus(key) {
@@ -771,6 +824,7 @@ function renderWorkstreams() {
 /* ============ Items on record, morning brief, session restore ============ */
 function daysAgo(iso) { return Math.floor((Date.now() - new Date(iso)) / 864e5); }
 function recLabel(i) {
+  if (i.status === 'done') return 'done';
   if (i.status === 'closed') { const d = daysAgo(i.loggedAt); return d >= 14 ? 'closed ' + Math.round(d / 7) + ' wks ago' : d <= 0 ? 'closed today' : 'closed ' + d + 'd ago'; }
   if (i.status === 'reopened') return 'reopened';
   if (i.dueDate) { const d = Math.ceil((new Date(i.dueDate) - Date.now()) / 864e5); return d < 0 ? 'overdue' : d === 0 ? 'due today' : d === 1 ? 'due tomorrow' : 'due in ' + d + 'd'; }
@@ -805,7 +859,9 @@ function fragToItem(f) {
     id: f.id, ws: wsKey(f.workstreamId), wsLabel: wsLabel(f.workstreamId), kind: kindOf(f),
     title: f.summary || 'Fragment read', snippet: f.rawText || '', action: f.suggestedAction || '',
     conflict: f.contradictsItemId ? prettyId(f.contradictsItemId) : '', src: f.source || 'Pasted',
-    risk: f.risk, at: new Date(f.createdAt || Date.now()), status: f.status
+    risk: f.risk, at: new Date(f.createdAt || Date.now()), status: f.status,
+    resolvedAt: f.resolvedAt ? new Date(f.resolvedAt) : null, edited: !!f.edited,
+    originalAction: f.originalAction || null, itemId: f.itemId || null
   };
 }
 // Restore this visitor's session (pending queue + what is on record) from the server.
@@ -816,7 +872,8 @@ async function loadState() {
     if (!resp.ok || !data.ok) throw new Error(data.error || 'state');
     items = data.items;
     const frs = data.fragments.map(fragToItem).reverse();      // newest first
-    captured = frs.slice();
+    history = frs.slice();
+    captured = frs.filter(f => f.status === 'pending' || f.status === 'confirmed');
     queue = frs.filter(f => f.status === 'pending');
   } catch (e) { items = null; }
   renderAll();
@@ -824,9 +881,171 @@ async function loadState() {
 function resetSession() {
   sid = newSid();
   try { localStorage.setItem('attapus-sid', sid); } catch (e) {}
-  queue = []; captured = []; $('input').value = '';
+  queue = []; captured = []; history = []; $('input').value = '';
   loadState();
   toast('Started a fresh session');
+}
+
+/* ============ Status tab: what is open, what is done, and the full history ============ */
+function whenStr(d) {
+  if (!d) return '';
+  const dt = new Date(d);
+  return dt.toDateString() === new Date().toDateString() ? timeStr(dt)
+    : dt.toLocaleDateString('en-SG', { day:'numeric', month:'short' }) + ', ' + timeStr(dt);
+}
+function catLabel(i) {
+  if (i.risk === 'urgent') return { t:'Urgent', c:'t-amber' };
+  if (i.risk === 'at_risk') return { t:'At risk', c:'t-amber' };
+  if (i.category === 'contradiction') return { t:'Contradiction', c:'t-rose' };
+  if (i.category === 'needs_decision') return { t:'Needs decision', c:'t-cyan' };
+  if (i.category === 'needs_reply') return { t:'Needs reply', c:'t-brand' };
+  return { t:'Open', c:'t-muted' };
+}
+function doneLabel(i) {
+  if (i.category === 'needs_reply') return 'Mark replied';
+  if (i.category === 'needs_decision') return 'Mark decided';
+  if (i.category === 'contradiction') return 'Mark resolved';
+  if (i.risk === 'urgent' || i.risk === 'at_risk') return 'Mark handled';
+  return 'Mark done';
+}
+function outcome(f) {
+  if (f.status === 'pending') return { t:'Pending review', c:'t-brand', k:'pending' };
+  if (f.status === 'dismissed') return { t:'Dismissed', c:'t-muted', k:'dismissed' };
+  const li = f.itemId && items ? items.find(i => i.id === f.itemId) : null;
+  if (li && li.status === 'done') return { t:'Done', c:'t-green', k:'done' };
+  if (li && li.status === 'closed') return { t:'Logged', c:'t-green', k:'logged' };
+  return { t:'Open', c:'t-cyan', k:'open' };
+}
+async function setDone(id, done) {
+  try {
+    const resp = await fetch('/api/complete', {
+      method:'POST', headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ sid, id, action: done ? 'done' : 'reopen' })
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.ok) throw new Error(data.error || ('HTTP ' + resp.status));
+    const idx = items.findIndex(i => i.id === id);
+    if (idx >= 0 && data.item) items[idx] = data.item;
+    renderAll();
+    toast(done ? 'Marked done' : 'Reopened');
+  } catch (err) { toast('Could not update that — please try again'); }
+}
+function toggleRow(key) { if (openRows.has(key)) openRows.delete(key); else openRows.add(key); renderStatus(); }
+
+function renderStatus() {
+  const root = $('statusRoot'); root.replaceChildren();
+  if (!items) {
+    const e = h('div', 'empty');
+    e.append(h('i', 'fa-solid fa-circle-info'), h('b', null, 'Status unavailable'), document.createTextNode('The items on record could not be loaded. Refresh to try again.'));
+    root.append(e); return;
+  }
+  const pending = queue.filter(q => !q.error);
+  const open = items.filter(i => i.status === 'open');
+  const done = items.filter(i => i.status === 'done');
+  const dismissed = history.filter(f => f.status === 'dismissed');
+  const logged = history.filter(f => outcome(f).k === 'logged');
+  const sh = (icon, title, sub) => {
+    const d = h('div', 'sub-head'), t = h('h3');
+    t.append(h('i', 'fa-solid ' + icon), document.createTextNode(' ' + title)); d.append(t);
+    if (sub) d.append(h('small', null, sub));
+    return d;
+  };
+
+  // headline numbers
+  const sg = h('div', 'sum-grid');
+  [['Pending review', pending.length, 'var(--brand-hi)'], ['Open actions', open.length, 'var(--amber)'], ['Done', done.length, 'var(--green)'], ['Dismissed', dismissed.length, 'var(--faint)'], ['Logged', logged.length, 'var(--cyan)']].forEach(([l, n, c]) => {
+    const d = h('div', 'sum'), b = h('b', null, String(n)); b.style.color = c; d.append(b, h('small', null, l)); sg.append(d);
+  });
+  root.append(sg);
+
+  // per workstream
+  const wg = h('div', 'wsum');
+  WS_ORDER.forEach(k => {
+    const w = WORKSTREAMS[k], st = wsStatus(k), box = h('div', 'box'), hd = h('h4');
+    hd.append(h('i', 'fa-solid ' + w.icon), document.createTextNode(w.name), h('span', 'badge mono ' + st.cls, st.label.toUpperCase()));
+    const mini = h('div', 'mini');
+    [['Pending', pending.filter(q => q.ws === k).length], ['Open', open.filter(i => wsKey(i.workstreamId) === k).length],
+     ['Done', done.filter(i => wsKey(i.workstreamId) === k).length], ['Edited', history.filter(f => f.ws === k && f.edited).length]]
+      .forEach(([l, n]) => { const d = h('div'); d.append(h('b', null, String(n)), document.createTextNode(l)); mini.append(d); });
+    box.append(hd, mini); wg.append(box);
+  });
+  root.append(wg);
+
+  // open actions
+  root.append(sh('fa-list-check', 'Open actions', open.length ? 'Confirmed, still waiting on you' : ''));
+  const actKinds = [['all', 'All', () => true], ['reply', 'Needs reply', i => i.category === 'needs_reply'], ['decision', 'Needs decision', i => i.category === 'needs_decision'],
+    ['contradiction', 'Contradiction', i => i.category === 'contradiction'], ['risk', 'At risk', i => i.risk === 'urgent' || i.risk === 'at_risk']];
+  const cnt = k => open.filter(k[2]).length;
+  const curK = actKinds.find(k => k[0] === actFilter);
+  if (!curK || (curK[0] !== 'all' && !cnt(curK))) actFilter = 'all';
+  if (open.length > 1) {
+    const ac = h('div', 'chips');
+    actKinds.filter(k => k[0] === 'all' || cnt(k) > 0).forEach(k => {
+      const b = h('button', 'chip-f' + (actFilter === k[0] ? ' active' : ''), k[1] + ' ' + cnt(k));
+      b.onclick = () => { actFilter = k[0]; renderStatus(); }; ac.append(b);
+    });
+    root.append(ac);
+  }
+  if (!open.length) root.append(h('div', 'none', 'Nothing open. Confirm an item from the review queue and it shows up here.'));
+  open.filter(actKinds.find(k => k[0] === actFilter)[2]).sort((a, b) => new Date(a.dueDate || a.loggedAt) - new Date(b.dueDate || b.loggedAt)).forEach(i => {
+    const key = 'o-' + i.id, c = catLabel(i);
+    const src = i.sourceFragmentId ? history.find(f => f.id === i.sourceFragmentId) : null;
+    const row = h('div', 'act-row'), top = h('div', 'row-top'), main = h('div', 'row-main'), tags = h('div', 'row-tags');
+    tags.append(h('span', 'badge mono ' + c.c, c.t), h('span', 'ws', wsLabel(i.workstreamId)));
+    const meta = [];
+    if (i.dueDate) meta.push(recLabel(i));
+    meta.push(src ? 'From ' + src.src + ' · ' + whenStr(src.at) : 'Shared demo item');
+    main.append(tags, h('div', 'row-title', i.title), h('div', 'row-meta', 'Next: ' + (i.summary || '—')), h('div', 'row-meta', meta.join(' · ')));
+    if (src) { const lb = h('button', 'link-btn', openRows.has(key) ? 'Hide original message' : 'View original message'); lb.onclick = () => toggleRow(key); main.append(lb); }
+    const act = h('div', 'q-btns'), ok = h('button', 'b-ok');
+    ok.append(h('i', 'fa-solid fa-check'), document.createTextNode(doneLabel(i))); ok.onclick = () => setDone(i.id, true); act.append(ok);
+    top.append(main, act); row.append(top);
+    if (src && openRows.has(key)) { const dd = h('div', 'row-detail'); dd.append(h('span', 'lbl', 'ORIGINAL MESSAGE'), h('div', 'snippet', src.snippet)); row.append(dd); }
+    root.append(row);
+  });
+
+  // done
+  if (done.length) {
+    const dh = sh('fa-circle-check', 'Done (' + done.length + ')', '');
+    const tb = h('button', 'link-btn', showDone ? 'Hide' : 'Show'); tb.style.marginTop = '0';
+    tb.onclick = () => { showDone = !showDone; renderStatus(); }; dh.append(tb); root.append(dh);
+    if (showDone) done.forEach(i => {
+      const row = h('div', 'act-row'), top = h('div', 'row-top'), main = h('div', 'row-main');
+      main.append(h('div', 'row-title', i.title), h('div', 'row-meta', wsLabel(i.workstreamId) + ' · done ' + whenStr(i.completedAt)));
+      const u = h('button', 'b-ghost', 'Undo'); u.onclick = () => setDone(i.id, false);
+      top.append(main, u); row.append(top); root.append(row);
+    });
+  }
+
+  // history
+  root.append(sh('fa-clock-rotate-left', 'History', history.length + ' message' + (history.length === 1 ? '' : 's') + ' this session'));
+  const outs = history.map(f => ({ f, o: outcome(f) }));
+  const match = (x, k) => k === 'all' || (k === 'edited' ? x.f.edited : x.o.k === k);
+  const chips = h('div', 'chips');
+  [['all', 'All'], ['pending', 'Pending'], ['open', 'Open'], ['logged', 'Logged'], ['done', 'Done'], ['edited', 'Edited'], ['dismissed', 'Dismissed']].forEach(([k, l]) => {
+    const b = h('button', 'chip-f' + (histFilter === k ? ' active' : ''), l + ' ' + outs.filter(x => match(x, k)).length);
+    b.onclick = () => { histFilter = k; renderStatus(); }; chips.append(b);
+  });
+  root.append(chips);
+  const shown = outs.filter(x => match(x, histFilter));
+  if (!shown.length) root.append(h('div', 'none', history.length ? 'Nothing in this filter.' : 'No messages yet. Paste something on the left to start the history.'));
+  shown.forEach(({ f, o }) => {
+    const key = 'h-' + f.id, row = h('div', 'hist-row'), top = h('div', 'row-top'), main = h('div', 'row-main'), tags = h('div', 'row-tags');
+    tags.append(h('span', 'badge mono ' + f.kind.tag, f.kind.label), h('span', 'ws', f.wsLabel));
+    if (f.edited) tags.append(h('span', 'edited-tag', 'edited'));
+    main.append(tags, h('div', 'row-title', f.title),
+      h('div', 'row-meta', f.src + ' · received ' + whenStr(f.at) + (f.resolvedAt ? ' · ' + (f.status === 'dismissed' ? 'dismissed ' : 'confirmed ') + whenStr(f.resolvedAt) : '')));
+    top.append(main, h('span', 'badge mono ' + o.c, o.t)); row.append(top);
+    if (openRows.has(key)) {
+      const dd = h('div', 'row-detail');
+      dd.append(h('span', 'lbl', 'ORIGINAL MESSAGE'), h('div', 'snippet', f.snippet));
+      if (f.edited && f.originalAction) dd.append(h('span', 'lbl', 'ÅTTAPUS PROPOSED'), h('div', null, f.originalAction), h('span', 'lbl', 'YOUR VERSION'), h('div', null, f.action));
+      else dd.append(h('span', 'lbl', 'PROPOSED ACTION'), h('div', null, f.action || '—'));
+      row.append(dd);
+    }
+    row.onclick = () => toggleRow(key);
+    root.append(row);
+  });
 }
 
 /* ============ Status update ============ */

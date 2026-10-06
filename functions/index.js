@@ -33,26 +33,44 @@ const iso = (t) => (t && t.toDate ? t.toDate().toISOString() : null);
 // visitor's own confirmed items. A seeded item that this visitor has reopened
 // is shown as "reopened" so it is no longer treated as a closed decision.
 async function loadContext(sid) {
-  const [wsSnap, itemsSnap] = await Promise.all([
+  const [wsSnap, itemsSnap, ovSnap] = await Promise.all([
     db.collection("workstreams").get(),
     db.collection("items").get(),
+    db.collection("overrides").where("sessionId", "==", sid).get(),
   ]);
   const workstreams = wsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  // A visitor can mark a shared (seeded) item done without changing it for anyone
+  // else: that choice is stored as a per-visitor override.
+  const overrides = new Map(ovSnap.docs.map((d) => [d.data().itemId, d.data()]));
   const all = itemsSnap.docs
     .map((d) => ({ id: d.id, ...d.data() }))
     .filter((i) => !i.sessionId || i.sessionId === sid);
   const superseded = new Set(all.filter((i) => i.supersedes).map((i) => i.supersedes));
-  const items = all.map((i) => ({
-    id: i.id,
-    workstreamId: i.workstreamId,
-    title: i.title,
-    status: superseded.has(i.id) ? "reopened" : i.status,
-    summary: i.summary,
-    dueDate: iso(i.dueDate),
-    loggedAt: iso(i.loggedAt),
-  }));
+  const items = all.map((i) => {
+    const ov = overrides.get(i.id);
+    return {
+      id: i.id,
+      workstreamId: i.workstreamId,
+      title: i.title,
+      status: ov ? ov.status : superseded.has(i.id) ? "reopened" : i.status,
+      summary: i.summary,
+      dueDate: iso(i.dueDate),
+      loggedAt: iso(i.loggedAt),
+      completedAt: iso(ov ? ov.completedAt : i.completedAt),
+      category: i.category || null,
+      risk: i.risk || null,
+      sourceFragmentId: i.sourceFragmentId || null,
+      mine: !!i.sessionId,
+    };
+  });
   return { workstreams, items };
 }
+
+// The subset of each item that Gemini needs to see.
+const forPrompt = (items) =>
+  items.map(({ id, workstreamId, title, status, summary, dueDate, loggedAt }) => ({
+    id, workstreamId, title, status, summary, dueDate, loggedAt,
+  }));
 
 async function deleteRefs(refs) {
   for (let i = 0; i < refs.length; i += 400) {
@@ -122,13 +140,15 @@ exports.seedDemoData = onRequest(async (req, res) => {
       // items and saved fragments). Handy before recording a demo take.
       let removed = null;
       if (req.query.reset === "1") {
-        const [itemsSnap, fragSnap] = await Promise.all([
+        const [itemsSnap, fragSnap, ovSnap] = await Promise.all([
           db.collection("items").get(),
           db.collection("fragments").get(),
+          db.collection("overrides").get(),
         ]);
         const refs = [
           ...itemsSnap.docs.filter((d) => d.data().sessionId).map((d) => d.ref),
           ...fragSnap.docs.map((d) => d.ref),
+          ...ovSnap.docs.map((d) => d.ref),
         ];
         await deleteRefs(refs);
         removed = refs.length;
@@ -216,7 +236,7 @@ Existing workstreams:
 ${JSON.stringify(workstreams, null, 2)}
 
 Existing items already on record (some closed, some open):
-${JSON.stringify(items, null, 2)}
+${JSON.stringify(forPrompt(items), null, 2)}
 
 Today's date: ${new Date().toISOString().slice(0, 10)}
 
@@ -310,10 +330,10 @@ exports.getState = onRequest(async (req, res) => {
       ]);
       const fragments = fragSnap.docs
         .map((d) => ({ id: d.id, ...d.data() }))
-        .filter((f) => f.status === "pending" || f.status === "confirmed")
+        .filter((f) => ["pending", "confirmed", "dismissed"].includes(f.status))
         .map((f) => ({ ...f, createdAt: iso(f.createdAt), resolvedAt: iso(f.resolvedAt) }))
         .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))
-        .slice(-50);
+        .slice(-100);
       res.status(200).json({ ok: true, workstreams, items, fragments });
     } catch (err) {
       logger.error("getState failed", err);
@@ -373,7 +393,7 @@ exports.resolveFragment = onRequest(async (req, res) => {
       const now = admin.firestore.Timestamp.now();
       if (action === "dismiss") {
         await ref.update({ status: "dismissed", resolvedAt: now });
-        return res.status(200).json({ ok: true, status: "dismissed" });
+        return res.status(200).json({ ok: true, status: "dismissed", resolvedAt: iso(now) });
       }
 
       const finalAction = editedAction || f.suggestedAction || f.summary || "";
@@ -385,6 +405,8 @@ exports.resolveFragment = onRequest(async (req, res) => {
         title: String(f.summary || "Logged item").slice(0, 90),
         summary: finalAction,
         status: f.category === "log_only" ? "closed" : "open",
+        category: f.category || null,
+        risk: f.risk || null,
         loggedAt: now,
         dueDate: null,
         sourceFragmentId: id,
@@ -394,6 +416,8 @@ exports.resolveFragment = onRequest(async (req, res) => {
       const fragUpdate = { status: "confirmed", resolvedAt: now, itemId: itemRef.id };
       if (editedAction || editedWs) {
         fragUpdate.edited = true;
+        fragUpdate.originalAction = f.suggestedAction || null;
+        fragUpdate.originalWorkstreamId = f.workstreamId;
         fragUpdate.suggestedAction = finalAction;
         fragUpdate.workstreamId = finalWs;
       }
@@ -412,11 +436,71 @@ exports.resolveFragment = onRequest(async (req, res) => {
           status: item.status,
           loggedAt: iso(now),
           dueDate: null,
+          completedAt: null,
+          category: item.category,
+          risk: item.risk,
+          sourceFragmentId: id,
+          mine: true,
         },
         reopened: item.supersedes,
+        resolvedAt: iso(now),
+        edited: !!(editedAction || editedWs),
       });
     } catch (err) {
       logger.error("resolveFragment failed", err);
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+});
+
+// ---------------------------------------------------------------------
+// completeItem: close the loop on an open item (e.g. the reply has been sent).
+//   done   -> status "done" (for a shared demo item, only for this visitor)
+//   reopen -> undo
+// ---------------------------------------------------------------------
+exports.completeItem = onRequest(async (req, res) => {
+  cors(req, res, async () => {
+    try {
+      if (req.method !== "POST") {
+        return res.status(405).json({ ok: false, error: "Use POST" });
+      }
+      const { id, action } = req.body || {};
+      const sid = getSid((req.body || {}).sid);
+      if (!/^[A-Za-z0-9_-]{2,60}$/.test(String(id || "")) || !["done", "reopen"].includes(action)) {
+        return res.status(400).json({ ok: false, error: "Bad request" });
+      }
+      const ref = db.collection("items").doc(String(id));
+      const snap = await ref.get();
+      if (!snap.exists) return res.status(404).json({ ok: false, error: "Not found" });
+      const it = snap.data();
+      const now = admin.firestore.Timestamp.now();
+
+      if (it.sessionId) {
+        if (it.sessionId !== sid) return res.status(403).json({ ok: false, error: "Not yours" });
+        if (action === "done") {
+          if (it.status !== "open" && it.status !== "done") {
+            return res.status(409).json({ ok: false, error: "Only open items can be completed" });
+          }
+          await ref.update({ status: "done", completedAt: now });
+        } else if (it.status === "done") {
+          await ref.update({ status: "open", completedAt: null });
+        }
+      } else {
+        const oref = db.collection("overrides").doc(sid + "__" + String(id));
+        if (action === "done") {
+          if (it.status !== "open") {
+            return res.status(409).json({ ok: false, error: "Only open items can be completed" });
+          }
+          await oref.set({ sessionId: sid, itemId: String(id), status: "done", completedAt: now });
+        } else {
+          await oref.delete();
+        }
+      }
+
+      const { items } = await loadContext(sid);
+      res.status(200).json({ ok: true, item: items.find((i) => i.id === String(id)) });
+    } catch (err) {
+      logger.error("completeItem failed", err);
       res.status(500).json({ ok: false, error: String(err) });
     }
   });
