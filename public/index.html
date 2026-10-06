@@ -221,9 +221,9 @@
 
   /* ---------- Status tab ---------- */
   .t-muted { background:var(--surface-2); color:var(--muted); }
-  .sum-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:14px; }
+  .sum-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(98px,1fr)); gap:10px; margin-bottom:14px; }
   .sum { padding:12px 14px; border-radius:14px; background:var(--card); border:1px solid var(--line); }
-  .sum b { display:block; font-size:24px; font-weight:800; line-height:1.1; }
+  .sum b { display:block; font-size:22px; font-weight:800; line-height:1.1; }
   .sum small { font-size:11.5px; color:var(--muted); }
   .wsum { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:10px; }
   .wsum .box h4 { display:flex; align-items:center; gap:8px; color:var(--text); font-size:13px; }
@@ -241,6 +241,7 @@
   .row-top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
   .row-main { min-width:0; flex:1; }
   .row-tags { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:5px; }
+  .follow { font-size:12px; color:var(--brand-text); margin:-4px 0 10px; display:flex; gap:6px; align-items:center; }
   .row-title { font-size:13.5px; font-weight:700; }
   .row-meta { font-size:11.5px; color:var(--muted); margin-top:3px; }
   .link-btn { background:none; border:none; padding:0; margin-top:6px; color:var(--brand-text); font-size:11.5px; font-weight:600; text-decoration:underline; }
@@ -601,7 +602,7 @@ async function runCapture() {
         id: r.id || ('i' + Date.now() + '-' + i), ws: wsKey(r.workstreamId), wsLabel: wsLabel(r.workstreamId),
         kind: k, title: r.summary || 'Fragment read', snippet: b.text, action: r.suggestedAction || '',
         conflict: r.contradictsItemId ? prettyId(r.contradictsItemId) : '', src: b.src,
-        risk: r.risk, at: new Date(), status: 'pending'
+        risk: r.risk, at: new Date(), status: 'pending', related: r.relatedItemId || null
       };
       captured.unshift(item); history.unshift(item);
       fresh.push({ item });
@@ -655,6 +656,8 @@ function itemCard(it) {
   tags.append(h('span', 'badge mono ' + k.tag, k.label), h('span', 'ws', '· ' + it.wsLabel));
   top.append(tags, h('span', 'when mono', (Date.now() - it.at < 120000 ? 'Just now' : 'Earlier') + ' · ' + it.src + ' · ' + timeStr(it.at)));
   card.append(top, h('div', 'q-title', it.title));
+  const relItem = it.related && items ? items.find(x => x.id === it.related) : null;
+  if (relItem) { const fl = h('div', 'follow'); fl.append(h('i', 'fa-solid fa-link'), document.createTextNode('Follows up: ' + relItem.title)); card.append(fl); }
 
   if (k.k === 'contradiction') {
     const b = h('div', 'banner contradiction');
@@ -738,6 +741,7 @@ async function resolve(id, confirmed) {
       it.status = 'confirmed'; it.resolvedAt = new Date(); it.edited = !!(edits.action || edits.workstreamId); it.itemId = data.item ? data.item.id : null;
       if (items && data.item && !items.some(i => i.id === data.item.id)) items.push(data.item);
       if (items && data.reopened) items.forEach(i => { if (i.id === data.reopened) i.status = 'reopened'; });
+      if (items && data.item && data.item.updates) items.forEach(i => { if (i.id === data.item.updates) i.status = 'updated'; });
     } else {
       captured = captured.filter(c => c.id !== id);   // dismissed: no longer counts toward the workstream
       it.status = 'dismissed'; it.resolvedAt = new Date();
@@ -825,6 +829,7 @@ function renderWorkstreams() {
 function daysAgo(iso) { return Math.floor((Date.now() - new Date(iso)) / 864e5); }
 function recLabel(i) {
   if (i.status === 'done') return 'done';
+  if (i.status === 'updated') return 'updated';
   if (i.status === 'closed') { const d = daysAgo(i.loggedAt); return d >= 14 ? 'closed ' + Math.round(d / 7) + ' wks ago' : d <= 0 ? 'closed today' : 'closed ' + d + 'd ago'; }
   if (i.status === 'reopened') return 'reopened';
   if (i.dueDate) { const d = Math.ceil((new Date(i.dueDate) - Date.now()) / 864e5); return d < 0 ? 'overdue' : d === 0 ? 'due today' : d === 1 ? 'due tomorrow' : 'due in ' + d + 'd'; }
@@ -861,7 +866,7 @@ function fragToItem(f) {
     conflict: f.contradictsItemId ? prettyId(f.contradictsItemId) : '', src: f.source || 'Pasted',
     risk: f.risk, at: new Date(f.createdAt || Date.now()), status: f.status,
     resolvedAt: f.resolvedAt ? new Date(f.resolvedAt) : null, edited: !!f.edited,
-    originalAction: f.originalAction || null, itemId: f.itemId || null
+    originalAction: f.originalAction || null, itemId: f.itemId || null, related: f.relatedItemId || null
   };
 }
 // Restore this visitor's session (pending queue + what is on record) from the server.
@@ -994,6 +999,8 @@ function renderStatus() {
     tags.append(h('span', 'badge mono ' + c.c, c.t), h('span', 'ws', wsLabel(i.workstreamId)));
     const meta = [];
     if (i.dueDate) meta.push(recLabel(i));
+    const upd = i.updates ? items.find(x => x.id === i.updates) : null;
+    if (upd) meta.push('Update to “' + upd.title + '”');
     meta.push(src ? 'From ' + src.src + ' · ' + whenStr(src.at) : 'Shared demo item');
     main.append(tags, h('div', 'row-title', i.title), h('div', 'row-meta', 'Next: ' + (i.summary || '—')), h('div', 'row-meta', meta.join(' · ')));
     if (src) { const lb = h('button', 'link-btn', openRows.has(key) ? 'Hide original message' : 'View original message'); lb.onclick = () => toggleRow(key); main.append(lb); }

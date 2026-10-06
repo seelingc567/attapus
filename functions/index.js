@@ -46,13 +46,14 @@ async function loadContext(sid) {
     .map((d) => ({ id: d.id, ...d.data() }))
     .filter((i) => !i.sessionId || i.sessionId === sid);
   const superseded = new Set(all.filter((i) => i.supersedes).map((i) => i.supersedes));
+  const updated = new Set(all.filter((i) => i.updates).map((i) => i.updates));
   const items = all.map((i) => {
     const ov = overrides.get(i.id);
     return {
       id: i.id,
       workstreamId: i.workstreamId,
       title: i.title,
-      status: ov ? ov.status : superseded.has(i.id) ? "reopened" : i.status,
+      status: ov ? ov.status : superseded.has(i.id) ? "reopened" : updated.has(i.id) ? "updated" : i.status,
       summary: i.summary,
       dueDate: iso(i.dueDate),
       loggedAt: iso(i.loggedAt),
@@ -60,6 +61,7 @@ async function loadContext(sid) {
       category: i.category || null,
       risk: i.risk || null,
       sourceFragmentId: i.sourceFragmentId || null,
+      updates: i.updates || null,
       mine: !!i.sessionId,
     };
   });
@@ -71,6 +73,15 @@ const forPrompt = (items) =>
   items.map(({ id, workstreamId, title, status, summary, dueDate, loggedAt }) => ({
     id, workstreamId, title, status, summary, dueDate, loggedAt,
   }));
+
+// Shorten at a word boundary (never mid-word) and add an ellipsis.
+function shorten(text, n) {
+  const t = String(text || "").trim();
+  if (t.length <= n) return t;
+  const cut = t.slice(0, n);
+  const sp = cut.lastIndexOf(" ");
+  return (sp > n * 0.6 ? cut.slice(0, sp) : cut).replace(/[\s,;:.-]+$/, "") + "…";
+}
 
 async function deleteRefs(refs) {
   for (let i = 0; i < refs.length; i += 400) {
@@ -219,6 +230,11 @@ exports.classifyFragment = onRequest(
               type: "STRING",
               description: "One short sentence proposing what to do next",
             },
+            relatedItemId: {
+              type: "STRING",
+              description:
+                "id of the existing OPEN item this fragment is a follow-up or update about, or empty string if none",
+            },
           },
           required: [
             "workstreamId",
@@ -227,6 +243,7 @@ exports.classifyFragment = onRequest(
             "risk",
             "contradictsItemId",
             "suggestedAction",
+            "relatedItemId",
           ],
         };
 
@@ -248,6 +265,7 @@ Rules:
 - category "contradiction" means the fragment conflicts with an item whose status is "closed" - e.g. a casual message that quietly reopens a decision. Set contradictsItemId to that item's id in this case.
 - risk "urgent" or "at_risk" applies ONLY when an existing OPEN item related to this fragment has gone quiet and has a near due date. A new request that merely mentions a deadline is NOT a risk, so set risk "none" for it. When you set a risk, the summary must say why, for example "silent for 2 days, due tomorrow".
 - If nothing matches an existing item, contradictsItemId is an empty string.
+- relatedItemId: if the fragment is a follow-up, chaser or update about an existing item whose status is "open", set relatedItemId to that item's id, otherwise an empty string. Never set it for a contradiction. Items with status "updated" have been replaced by a newer item, so ignore them.
 - Keep summary and suggestedAction short and concrete, no more than one sentence each.`;
 
         const resp = await fetchWithRetry(
@@ -284,6 +302,12 @@ Rules:
         }
 
         const parsed = JSON.parse(raw);
+        // Only trust a link to an item that really exists and is open.
+        const openIds = new Set(items.filter((i) => i.status === "open").map((i) => i.id));
+        const related =
+          parsed.relatedItemId && parsed.category !== "contradiction" && openIds.has(parsed.relatedItemId)
+            ? parsed.relatedItemId
+            : null;
 
         const fragmentDoc = {
           rawText: text,
@@ -293,6 +317,7 @@ Rules:
           risk: parsed.risk,
           contradictsItemId: parsed.contradictsItemId || null,
           suggestedAction: parsed.suggestedAction,
+          relatedItemId: related,
           source,
           sessionId: sid,
           status: "pending",
@@ -396,21 +421,34 @@ exports.resolveFragment = onRequest(async (req, res) => {
         return res.status(200).json({ ok: true, status: "dismissed", resolvedAt: iso(now) });
       }
 
+      // A follow-up replaces the open item it is about (keeping its deadline)
+      // instead of creating a duplicate. Log-only notes and contradictions never do.
+      let updates = null;
+      let inheritedDue = null;
+      if (f.relatedItemId && f.category !== "contradiction" && f.category !== "log_only") {
+        const { items: ctx } = await loadContext(sid);
+        const rel = ctx.find((i) => i.id === f.relatedItemId && i.status === "open");
+        if (rel) {
+          updates = rel.id;
+          inheritedDue = rel.dueDate ? admin.firestore.Timestamp.fromMillis(Date.parse(rel.dueDate)) : null;
+        }
+      }
       const finalAction = editedAction || f.suggestedAction || f.summary || "";
       const finalWs = editedWs || f.workstreamId;
       const itemRef = db.collection("items").doc();
       const item = {
         sessionId: sid,
         workstreamId: finalWs,
-        title: String(f.summary || "Logged item").slice(0, 90),
+        title: shorten(f.summary || "Logged item", 160),
         summary: finalAction,
         status: f.category === "log_only" ? "closed" : "open",
         category: f.category || null,
         risk: f.risk || null,
         loggedAt: now,
-        dueDate: null,
+        dueDate: inheritedDue,
         sourceFragmentId: id,
         supersedes: f.contradictsItemId || null,
+        updates,
       };
       const batch = db.batch();
       const fragUpdate = { status: "confirmed", resolvedAt: now, itemId: itemRef.id };
@@ -435,8 +473,9 @@ exports.resolveFragment = onRequest(async (req, res) => {
           summary: item.summary,
           status: item.status,
           loggedAt: iso(now),
-          dueDate: null,
+          dueDate: iso(item.dueDate),
           completedAt: null,
+          updates: item.updates,
           category: item.category,
           risk: item.risk,
           sourceFragmentId: id,

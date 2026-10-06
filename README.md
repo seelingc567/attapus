@@ -85,6 +85,7 @@ Connecting to company mail and chat usually means a long IT security review. Pas
 - Paste capture with multi-item input (separate messages with `---`)
 - Live Gemini classification against stored history, with contradiction and going-quiet detection
 - Review queue with **Confirm / Dismiss that saves to Firestore**: a confirmed item joins the history Gemini checks next time, and a confirmed contradiction reopens the closed decision
+- **Follow-ups update instead of duplicating**: when a message is a chaser or update about an open item, Gemini links it to that item, and confirming it replaces the old item (keeping its deadline) rather than creating a second one
 - **Edit before you confirm**: correct the proposed action or the workstream Gemini picked, then save the corrected version
 - **Your session survives a refresh**: the pending queue and what is on record are restored from the database
 - A **morning brief generated from the items on record** (what is close to its deadline, which closed decisions to watch), not hard-coded text
