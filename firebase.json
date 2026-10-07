@@ -26,6 +26,10 @@
       {
         "source": "/api/complete",
         "function": "completeItem"
+      },
+      {
+        "source": "/api/ask",
+        "function": "askAttapus"
       }
     ]
   },

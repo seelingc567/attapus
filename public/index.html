@@ -210,9 +210,6 @@
   .modal-head h3 { font-size:15px; }
   .modal-head p { font-size:12px; color:var(--muted); }
   .modal-body { padding:18px 20px; }
-  .deck-row { display:flex; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--line); font-size:13px; }
-  .deck-row:last-child { border-bottom:none; }
-  .deck-row small { display:block; color:var(--muted); font-size:12px; }
   .modal-foot { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:14px 20px; border-top:1px solid var(--line); font-size:11.5px; color:var(--faint); flex-wrap:wrap; }
 
   .toast { position:fixed; bottom:20px; right:20px; z-index:60; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:11px 15px; font-size:12.5px; box-shadow:var(--shadow); display:flex; align-items:center; gap:10px; transform:translateY(80px); opacity:0; transition:.25s; pointer-events:none; max-width:calc(100vw - 40px); }
@@ -253,6 +250,24 @@
   .chip-f { font-size:11.5px; font-weight:600; padding:5px 11px; border-radius:99px; border:1px solid var(--line); background:var(--surface-2); color:var(--muted); }
   .chip-f.active { background:var(--brand-soft); color:var(--brand-text); border-color:color-mix(in srgb, var(--brand) 45%, transparent); }
 
+  /* ---------- Superseded transition, recent changes, Ask ---------- */
+  .trans { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:-2px 0 10px; font-size:12px; }
+  .trans .lead2 { font-size:10.5px; font-weight:700; letter-spacing:.04em; color:var(--faint); }
+  .trans .from { padding:4px 10px; border-radius:8px; background:var(--surface-2); border:1px solid var(--line); color:var(--faint); text-decoration:line-through; }
+  .trans .to { padding:4px 10px; border-radius:8px; background:var(--rose-soft); color:var(--rose-text); font-weight:700; }
+  .trans i { color:var(--rose); }
+  .change-row { display:flex; gap:10px; align-items:flex-start; padding:10px 12px; border-radius:12px; background:var(--card); border:1px solid var(--line); margin-bottom:8px; }
+  .change-row > i { color:var(--green); margin-top:3px; }
+  .change-main b { font-size:13px; }
+  .ask-chips { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+  .ask-box { display:flex; gap:8px; align-items:stretch; }
+  .ask-box textarea { min-height:56px; flex:1; font-family:inherit; font-size:13px; resize:none; }
+  .ask-go { width:auto; padding:0 22px; }
+  .ask-status { margin-top:14px; font-size:12.5px; color:var(--muted); }
+  .ask-answer { margin-top:14px; padding:14px 16px; border-radius:14px; background:var(--surface-2); border:1px solid var(--line); font-size:13.5px; line-height:1.6; white-space:pre-wrap; }
+  .based { margin-top:10px; display:flex; gap:6px; flex-wrap:wrap; align-items:center; font-size:11px; color:var(--faint); }
+  .based span.t { padding:2px 9px; border-radius:99px; background:var(--brand-soft); color:var(--brand-text); font-weight:600; }
+
   /* ---------- Responsive: iPad portrait / phone ---------- */
   @media (max-width: 900px) {
     body { overflow:auto; display:block; }
@@ -279,7 +294,7 @@
   </div>
   <div class="head-right">
     <div class="pill"><span class="dot"></span><span>Gemini memory active</span><span style="opacity:.4">|</span><span>3 workstreams</span></div>
-    <button class="btn" onclick="openDeck()"><i class="fa-solid fa-file-lines"></i><span class="lbl">Status update</span></button>
+    <button class="btn" onclick="openAsk()"><i class="fa-solid fa-wand-magic-sparkles"></i><span class="lbl">Ask Åttapus</span></button>
     <button class="btn icon-btn" id="themeBtn" onclick="toggleTheme()" aria-label="Toggle light or dark mode"><i class="fa-solid fa-sun"></i></button>
     <div class="avatar" title="Seeling">S</div>
   </div>
@@ -365,6 +380,9 @@
       </div>
       <div class="queue" id="queue"></div>
 
+      <div class="sub-head"><h3><i class="fa-solid fa-clock-rotate-left"></i> Recent changes</h3><small>Approved by you</small></div>
+      <div id="changesRoot"></div>
+
       <div class="stats">
         <div class="stat"><div class="n" style="color:var(--brand-hi)">3</div><div><small>Active workstreams</small><b>Construction · Retail · Marketing</b></div></div>
         <div class="stat"><div class="n" style="color:var(--green)" id="sTriaged">0</div><div><small>Read this session</small><b id="sTriagedT">Paste something to start</b></div></div>
@@ -379,7 +397,7 @@
           <h2><i class="fa-solid fa-layer-group"></i> Workstreams</h2>
           <p>Structured memory kept up to date from everything you paste in.</p>
         </div>
-        <button class="btn" onclick="openDeck()"><i class="fa-solid fa-wand-magic-sparkles"></i><span>Generate status update</span></button>
+        <button class="btn" onclick="openAsk()"><i class="fa-solid fa-wand-magic-sparkles"></i><span>Ask Åttapus</span></button>
       </div>
       <div id="wsList"></div>
     </section>
@@ -397,17 +415,24 @@
   </main>
 </div>
 
-<!-- Status update modal -->
-<div class="overlay" id="overlay" onclick="if(event.target===this)closeDeck()">
+<!-- Ask Åttapus: one question, answered from what is already tracked -->
+<div class="overlay" id="overlay" onclick="if(event.target===this)closeAsk()">
   <div class="modal">
     <div class="modal-head">
-      <div><h3>Status update</h3><p id="deckDate">Built from what's already tracked — no retyping.</p></div>
-      <button class="x" onclick="closeDeck()" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+      <div><h3>Ask Åttapus</h3><p>One question, answered from what is already tracked. Ask for a status update too.</p></div>
+      <button class="x" onclick="closeAsk()" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
     </div>
-    <div class="modal-body" id="deckBody"></div>
+    <div class="modal-body">
+      <div class="ask-chips" id="askChips"></div>
+      <div class="ask-box">
+        <textarea id="askInput" maxlength="300" rows="2" placeholder="e.g. What's at risk right now?"></textarea>
+        <button class="btn-main ask-go" id="askGo" onclick="askNow()">Ask</button>
+      </div>
+      <div id="askOut"></div>
+    </div>
     <div class="modal-foot">
-      <span>PowerPoint export is on the roadmap.</span>
-      <button class="btn" onclick="copyDeck()"><i class="fa-regular fa-copy"></i><span id="copyLbl">Copy summary</span></button>
+      <span>Answers use only your tracked items and message summaries.</span>
+      <button class="btn" id="askCopy" onclick="copyAnswer()" style="display:none"><i class="fa-regular fa-copy"></i><span id="copyLbl">Copy answer</span></button>
     </div>
   </div>
 </div>
@@ -601,7 +626,7 @@ async function runCapture() {
       const item = {
         id: r.id || ('i' + Date.now() + '-' + i), ws: wsKey(r.workstreamId), wsLabel: wsLabel(r.workstreamId),
         kind: k, title: r.summary || 'Fragment read', snippet: b.text, action: r.suggestedAction || '',
-        conflict: r.contradictsItemId ? prettyId(r.contradictsItemId) : '', src: b.src,
+        conflict: r.contradictsItemId ? prettyId(r.contradictsItemId) : '', conflictId: r.contradictsItemId || null, src: b.src,
         risk: r.risk, at: new Date(), status: 'pending', related: r.relatedItemId || null
       };
       captured.unshift(item); history.unshift(item);
@@ -665,6 +690,13 @@ function itemCard(it) {
     const t = h('div'); t.append(h('b', null, 'Reopens something already closed'));
     if (it.conflict) t.append(document.createTextNode(': ' + it.conflict + '. Confirm before changing a settled decision.'));
     b.append(t); card.append(b);
+    // What happens to the old decision if the user confirms: Closed -> Superseded.
+    const old = it.conflictId && items ? items.find(x => x.id === it.conflictId) : null;
+    const tr = h('div', 'trans');
+    tr.append(h('span', 'lead2', 'IF YOU CONFIRM'),
+      h('span', 'from', (old ? old.title : it.conflict || 'Closed decision') + ' · ' + (old && old.status === 'closed' ? recLabel(old) : 'closed')),
+      h('i', 'fa-solid fa-arrow-right'), h('span', 'to', 'Superseded'));
+    card.append(tr);
   } else if (k.k === 'risk') {
     const b = h('div', 'banner risk');
     b.append(h('i', 'fa-solid fa-clock'));
@@ -747,7 +779,7 @@ async function resolve(id, confirmed) {
       it.status = 'dismissed'; it.resolvedAt = new Date();
     }
     renderAll();
-    toast(confirmed ? 'Saved to memory: ' + it.title : 'Dismissed');
+    toast(confirmed ? 'Approved and logged: ' + it.title : 'Dismissed');
   } catch (err) {
     it.saving = false; renderAll();
     toast('Could not save that — please try again');
@@ -784,6 +816,7 @@ function renderAll() {
   renderWorkstreams();
   renderBrief();
   renderStatus();
+  renderChanges();
 }
 
 function wsStatus(key) {
@@ -831,7 +864,7 @@ function recLabel(i) {
   if (i.status === 'done') return 'done';
   if (i.status === 'updated') return 'updated';
   if (i.status === 'closed') { const d = daysAgo(i.loggedAt); return d >= 14 ? 'closed ' + Math.round(d / 7) + ' wks ago' : d <= 0 ? 'closed today' : 'closed ' + d + 'd ago'; }
-  if (i.status === 'reopened') return 'reopened';
+  if (i.status === 'reopened') return 'superseded';
   if (i.dueDate) { const d = Math.ceil((new Date(i.dueDate) - Date.now()) / 864e5); return d < 0 ? 'overdue' : d === 0 ? 'due today' : d === 1 ? 'due tomorrow' : 'due in ' + d + 'd'; }
   return i.status;
 }
@@ -863,7 +896,7 @@ function fragToItem(f) {
   return {
     id: f.id, ws: wsKey(f.workstreamId), wsLabel: wsLabel(f.workstreamId), kind: kindOf(f),
     title: f.summary || 'Fragment read', snippet: f.rawText || '', action: f.suggestedAction || '',
-    conflict: f.contradictsItemId ? prettyId(f.contradictsItemId) : '', src: f.source || 'Pasted',
+    conflict: f.contradictsItemId ? prettyId(f.contradictsItemId) : '', conflictId: f.contradictsItemId || null, src: f.source || 'Pasted',
     risk: f.risk, at: new Date(f.createdAt || Date.now()), status: f.status,
     resolvedAt: f.resolvedAt ? new Date(f.resolvedAt) : null, edited: !!f.edited,
     originalAction: f.originalAction || null, itemId: f.itemId || null, related: f.relatedItemId || null
@@ -889,6 +922,19 @@ function resetSession() {
   queue = []; captured = []; history = []; $('input').value = '';
   loadState();
   toast('Started a fresh session');
+}
+
+/* ============ Recent changes: suggested -> approved -> logged ============ */
+function renderChanges() {
+  const root = $('changesRoot'); root.replaceChildren();
+  const rows = history.filter(f => f.status === 'confirmed' && f.resolvedAt)
+    .sort((a, b) => new Date(b.resolvedAt) - new Date(a.resolvedAt)).slice(0, 5);
+  if (!rows.length) { root.append(h('div', 'none', 'Nothing approved yet. Approve an item above and it is logged here.')); return; }
+  rows.forEach(f => {
+    const r = h('div', 'change-row'), m = h('div', 'change-main');
+    m.append(h('b', null, f.wsLabel + ' — ' + f.title), h('div', 'row-meta', 'Approved' + (f.edited ? ' (edited)' : '') + ' · ' + whenStr(f.resolvedAt)));
+    r.append(h('i', 'fa-solid fa-circle-check'), m); root.append(r);
+  });
 }
 
 /* ============ Status tab: what is open, what is done, and the full history ============ */
@@ -1055,41 +1101,44 @@ function renderStatus() {
   });
 }
 
-/* ============ Status update ============ */
-function deckText() {
-  const d = new Date().toLocaleDateString('en-SG', { day:'numeric', month:'short', year:'numeric' });
-  let t = `STATUS UPDATE — ${d}\n`;
-  WS_ORDER.forEach(k => {
-    const st = wsStatus(k), mine = captured.filter(c => c.ws === k);
-    t += `\n${WORKSTREAMS[k].name}: ${st.label} — ${st.sub}\n`;
-    mine.slice(0, 5).forEach(c => { t += `  • [${c.kind.label}] ${c.title}${c.action ? ' → ' + c.action : ''}\n`; });
-  });
-  return t.trim();
-}
-function openDeck() {
-  const body = $('deckBody'); body.replaceChildren();
-  $('deckDate').textContent = 'Built from what is already tracked — ' + new Date().toLocaleDateString('en-SG', { day:'numeric', month:'short', year:'numeric' });
-  WS_ORDER.forEach(k => {
-    const st = wsStatus(k), mine = captured.filter(c => c.ws === k);
-    const row = h('div', 'deck-row');
-    const left = h('div'); left.append(h('b', null, WORKSTREAMS[k].name));
-    left.append(h('small', null, mine.length ? mine.slice(0, 3).map(c => c.title).join(' · ') : st.sub));
-    row.append(left, h('span', 'badge mono ' + st.cls, st.label.toUpperCase()));
-    body.append(row);
-  });
+/* ============ Ask Åttapus: one question, answered from what is tracked ============ */
+const ASK_CHIPS = ["What's at risk right now?", "What changed since yesterday?", "Latest on Marketing Campaign?"];
+let askBusy = false, lastAnswer = '';
+function openAsk() {
+  const chips = $('askChips');
+  if (!chips.childElementCount) ASK_CHIPS.forEach(q => { const b = h('button', 'chip-f', q); b.onclick = () => askNow(q); chips.append(b); });
   $('overlay').classList.add('on');
+  setTimeout(() => $('askInput').focus(), 50);
 }
-function closeDeck() { $('overlay').classList.remove('on'); }
-async function copyDeck() {
-  const text = deckText();
-  try { await navigator.clipboard.writeText(text); }
-  catch (e) {
-    const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
-    try { document.execCommand('copy'); } catch (e2) {}
-    document.body.removeChild(ta);
-  }
-  $('copyLbl').textContent = 'Copied!';
-  setTimeout(() => { $('copyLbl').textContent = 'Copy summary'; }, 1800);
+function closeAsk() { $('overlay').classList.remove('on'); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAsk(); });
+document.addEventListener('DOMContentLoaded', () => {
+  $('askInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); askNow(); } });
+});
+async function askNow(q) {
+  const input = $('askInput'), out = $('askOut');
+  const question = (typeof q === 'string' ? q : input.value).trim();
+  if (!question || askBusy) return;
+  input.value = question; askBusy = true; $('askGo').disabled = true; $('askCopy').style.display = 'none';
+  out.replaceChildren(h('div', 'ask-status', 'Reading your tracked items…'));
+  const slow = setTimeout(() => { out.replaceChildren(h('div', 'ask-status', 'Still thinking — Gemini is busy, retrying automatically…')); }, 8000);
+  const controller = new AbortController(), abort = setTimeout(() => controller.abort(), 60000);
+  try {
+    const resp = await fetch('/api/ask', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ sid, question }), signal: controller.signal });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.ok) throw new Error(data.error || ('HTTP ' + resp.status));
+    lastAnswer = data.answer;
+    const box = h('div', 'ask-answer', data.answer); const wrap = h('div'); wrap.append(box);
+    if (data.basedOn && data.basedOn.length) { const bd = h('div', 'based'); bd.append(document.createTextNode('Based on:')); data.basedOn.forEach(t => bd.append(h('span', 't', t))); wrap.append(bd); }
+    out.replaceChildren(wrap); $('askCopy').style.display = '';
+  } catch (err) {
+    out.replaceChildren(h('div', 'ask-status', err.name === 'AbortError' ? 'That took too long — Gemini may be busy. Try again in a moment.' : 'Could not answer that (' + err.message + '). Try again.'));
+  } finally { clearTimeout(slow); clearTimeout(abort); askBusy = false; $('askGo').disabled = false; }
+}
+async function copyAnswer() {
+  try { await navigator.clipboard.writeText(lastAnswer); }
+  catch (e) { const ta = document.createElement('textarea'); ta.value = lastAnswer; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch (e2) {} document.body.removeChild(ta); }
+  $('copyLbl').textContent = 'Copied!'; setTimeout(() => { $('copyLbl').textContent = 'Copy answer'; }, 1800);
 }
 
 renderAll();

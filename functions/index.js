@@ -544,3 +544,123 @@ exports.completeItem = onRequest(async (req, res) => {
     }
   });
 });
+
+// ---------------------------------------------------------------------
+// askAttapus: one question, answered by Gemini from what is already tracked
+// (this visitor's workstreams, items on record and message summaries). It is a
+// single question box, not a chat: nothing about the question is stored.
+// ---------------------------------------------------------------------
+const MAX_QUESTION = 300;
+exports.askAttapus = onRequest({ secrets: [GEMINI_API_KEY] }, async (req, res) => {
+  cors(req, res, async () => {
+    try {
+      if (req.method !== "POST") {
+        return res.status(405).json({ ok: false, error: "Use POST" });
+      }
+      const body = req.body || {};
+      const question = typeof body.question === "string" ? body.question.trim() : "";
+      const sid = getSid(body.sid);
+      if (!question) return res.status(400).json({ ok: false, error: "Missing 'question'" });
+      if (question.length > MAX_QUESTION) {
+        return res
+          .status(400)
+          .json({ ok: false, error: "Question is too long (max " + MAX_QUESTION + " characters)" });
+      }
+
+      const [{ workstreams, items }, fragSnap] = await Promise.all([
+        loadContext(sid),
+        db.collection("fragments").where("sessionId", "==", sid).get(),
+      ]);
+      // Only summaries and outcomes go to Gemini, never the raw pasted text.
+      const messages = fragSnap.docs
+        .map((d) => d.data())
+        .filter((f) => ["pending", "confirmed", "dismissed"].includes(f.status))
+        .sort((a, b) => String(iso(a.createdAt)).localeCompare(String(iso(b.createdAt))))
+        .slice(-30)
+        .map((f) => ({
+          workstreamId: f.workstreamId,
+          received: iso(f.createdAt),
+          source: f.source || "",
+          type: f.category,
+          risk: f.risk,
+          summary: f.summary,
+          proposedAction: f.suggestedAction,
+          outcome: f.status,
+          resolvedAt: iso(f.resolvedAt),
+          editedByUser: !!f.edited,
+        }));
+
+      const schema = {
+        type: "OBJECT",
+        properties: {
+          answer: { type: "STRING", description: "The answer, plain text" },
+          basedOn: {
+            type: "ARRAY",
+            items: { type: "STRING" },
+            description: "Titles of the items or messages the answer is based on (max 5)",
+          },
+        },
+        required: ["answer", "basedOn"],
+      };
+
+      const prompt = `You are Åttapus, a memory and triage layer for someone juggling several workstreams. The user asks a question. Answer ONLY from the tracked data below. Never invent items, dates or people. If the data does not contain the answer, say so plainly.
+
+Workstreams:
+${JSON.stringify(workstreams, null, 2)}
+
+Items on record (status: open = waiting on the user, closed = a settled decision, reopened = a closed decision that is being superseded, updated = replaced by a newer item, done = completed):
+${JSON.stringify(forPrompt(items), null, 2)}
+
+Messages the user pasted this session, oldest first (outcome: pending = awaiting the user's approval, confirmed = approved, dismissed = set aside):
+${JSON.stringify(messages, null, 2)}
+
+Today's date: ${new Date().toISOString().slice(0, 10)}
+
+Question: """${question}"""
+
+Rules:
+- Be concise: at most 6 short lines, under 120 words. Lead with the answer.
+- Name items by their titles and say why, for example "silent for 2 days, due tomorrow".
+- "At risk" means an open item that has gone quiet or is close to its due date, or a pending message flagged urgent or at_risk.
+- "Since yesterday" means anything received, logged, approved or completed from yesterday onward.
+- If the user asks for a status update, write a short update grouped by workstream that could be sent to a manager.
+- Plain text only. Use a leading "- " for bullets and no other markdown symbols.
+- basedOn lists the titles you used, at most 5.`;
+
+      const resp = await fetchWithRetry(
+        `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY.value()}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig: {
+              responseMimeType: "application/json",
+              responseSchema: schema,
+              temperature: 0.2,
+            },
+          }),
+        }
+      );
+      if (!resp.ok) {
+        const errText = await resp.text();
+        logger.error("Gemini API error (ask)", errText);
+        return res.status(502).json({ ok: false, error: "Gemini API error" });
+      }
+      const data = await resp.json();
+      const raw = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!raw) return res.status(502).json({ ok: false, error: "No answer from Gemini" });
+      const parsed = JSON.parse(raw);
+      res.status(200).json({
+        ok: true,
+        answer: String(parsed.answer || "").slice(0, 1500),
+        basedOn: (Array.isArray(parsed.basedOn) ? parsed.basedOn : [])
+          .slice(0, 5)
+          .map((t) => String(t).slice(0, 120)),
+      });
+    } catch (err) {
+      logger.error("askAttapus failed", err);
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+});

@@ -72,6 +72,7 @@ The seeded demo history is shared, but everything a visitor does on top of it (t
 | `POST /api/classify` | Reads a pasted fragment against the visitor's context and returns the proposal |
 | `POST /api/resolve` | Confirm (save to memory) or dismiss a proposal |
 | `POST /api/complete` | Mark an open item done (or undo) |
+| `POST /api/ask` | Answers one question from the visitor's tracked items and message summaries (raw pasted text is never sent) |
 | `GET /api/state` | Restores the visitor's queue and the items on record |
 | `GET /api/seed` | (Re)loads the demo data; `?reset=1` also wipes every visitor sandbox |
 
@@ -86,17 +87,20 @@ Connecting to company mail and chat usually means a long IT security review. Pas
 - Live Gemini classification against stored history, with contradiction and going-quiet detection
 - Review queue with **Confirm / Dismiss that saves to Firestore**: a confirmed item joins the history Gemini checks next time, and a confirmed contradiction reopens the closed decision
 - **Follow-ups update instead of duplicating**: when a message is a chaser or update about an open item, Gemini links it to that item, and confirming it replaces the old item (keeping its deadline) rather than creating a second one
+- **Superseded, spelled out**: a contradiction card shows exactly what confirming will do to the old decision (~~Tile selection · closed~~ → **Superseded**) before anything changes
+- **Approve → logged**: approving removes the card and adds a timestamped line to a *Recent changes* log, so you can watch an item go from suggested to approved to recorded
 - **Edit before you confirm**: correct the proposed action or the workstream Gemini picked, then save the corrected version
 - **Your session survives a refresh**: the pending queue and what is on record are restored from the database
 - A **morning brief generated from the items on record** (what is close to its deadline, which closed decisions to watch), not hard-coded text
 - **Status tab**: pending / open / done / dismissed counts per workstream, an **Open actions** list with *Mark done* (and *View original message*), and a **filterable history** of every message showing what happened to it (confirmed, edited, dismissed, done), including the original proposal next to your edited version
-- Workstreams view and a copy-to-clipboard status update
+- **Ask Åttapus**: one question box (no chat thread, nothing stored) that Gemini answers only from what is already tracked, with a *Based on* list showing which items it used. It also writes status updates on request.
+- Workstreams view
 - Light and dark themes
 
 **Not built yet (honest list):**
 - Screenshot / image ingestion (the tab is there; it is on the roadmap)
 - Live Outlook / Teams / SharePoint connectors (intentionally out of scope)
-- PowerPoint export of the status update (copy-to-clipboard works today)
+- PowerPoint export of status updates (Ask Åttapus can write one as text today)
 - Vector retrieval for large histories (the demo history is small, so the full history goes into the prompt)
 
 ## Project structure
