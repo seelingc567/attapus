@@ -3,6 +3,7 @@ const { defineSecret } = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 const cors = require("cors")({ origin: true });
+const { parseRange, buildGate, autoSummary, summaryPromptData } = require("./gate");
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -62,6 +63,7 @@ async function loadContext(sid) {
       risk: i.risk || null,
       sourceFragmentId: i.sourceFragmentId || null,
       updates: i.updates || null,
+      supersedes: i.supersedes || null,
       mine: !!i.sessionId,
     };
   });
@@ -660,6 +662,87 @@ Rules:
       });
     } catch (err) {
       logger.error("askAttapus failed", err);
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+});
+
+// ---------------------------------------------------------------------
+// gateReview: a one-page status between two dates (a gate or milestone review).
+// All counts, progress and RAG are computed from the data. Gemini only writes the
+// short executive summary from titles and counts (never raw messages); if it is
+// unavailable the report still returns, with a plain-text summary. Nothing is stored.
+// ---------------------------------------------------------------------
+exports.gateReview = onRequest({ secrets: [GEMINI_API_KEY] }, async (req, res) => {
+  cors(req, res, async () => {
+    try {
+      if (req.method !== "POST") {
+        return res.status(405).json({ ok: false, error: "Use POST" });
+      }
+      const body = req.body || {};
+      const sid = getSid(body.sid);
+      const range = parseRange(body.from, body.to, body.tz);
+      if (range.error) return res.status(400).json({ ok: false, error: range.error });
+
+      const [{ workstreams, items }, fragSnap] = await Promise.all([
+        loadContext(sid),
+        db.collection("fragments").where("sessionId", "==", sid).get(),
+      ]);
+      const ws = typeof body.ws === "string" && workstreams.some((w) => w.id === body.ws) ? body.ws : "all";
+      const fragments = fragSnap.docs.map((d) => ({ status: d.data().status, workstreamId: d.data().workstreamId }));
+      const g = buildGate({ workstreams, items, fragments, fromMs: range.fromMs, toMs: range.toMs, ws, now: Date.now() });
+
+      let summary = autoSummary(g);
+      let summarySource = "auto";
+      if (g.totals.items || g.totals.superseded) {
+        try {
+          const schema = {
+            type: "OBJECT",
+            properties: { summary: { type: "STRING", description: "Executive summary, plain text" } },
+            required: ["summary"],
+          };
+          const prompt = `You write the executive summary for a gate or milestone review. Use ONLY the data below. Never invent items, dates, people or numbers.
+
+Period: ${body.from} to ${body.to}
+Data (counts are already computed, do not recount):
+${JSON.stringify(summaryPromptData(g), null, 2)}
+
+Rules:
+- 2 to 4 sentences, under 80 words, plain text, no bullets or markdown.
+- Lead with the overall position (resolved vs in progress).
+- Name what is at risk and what needs a decision, by title, and say why.
+- If nothing is flagged, say so plainly. Do not pad.`;
+          const resp = await fetchWithRetry(
+            `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY.value()}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                contents: [{ role: "user", parts: [{ text: prompt }] }],
+                generationConfig: { responseMimeType: "application/json", responseSchema: schema, temperature: 0.2 },
+              }),
+            },
+            3,
+            3000
+          );
+          if (resp.ok) {
+            const data = await resp.json();
+            const raw = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            const text = raw ? String(JSON.parse(raw).summary || "").trim() : "";
+            if (text) {
+              summary = text.slice(0, 900);
+              summarySource = "gemini";
+            }
+          } else {
+            logger.error("Gemini API error (gate)", await resp.text());
+          }
+        } catch (e) {
+          logger.error("Gemini summary failed, using fallback", e);
+        }
+      }
+      res.status(200).json({ ok: true, from: body.from, to: body.to, ws, summary, summarySource, ...g });
+    } catch (err) {
+      logger.error("gateReview failed", err);
       res.status(500).json({ ok: false, error: String(err) });
     }
   });

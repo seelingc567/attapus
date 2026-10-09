@@ -73,6 +73,7 @@ The seeded demo history is shared, but everything a visitor does on top of it (t
 | `POST /api/resolve` | Confirm (save to memory) or dismiss a proposal |
 | `POST /api/complete` | Mark an open item done (or undo) |
 | `POST /api/ask` | Answers one question from the visitor's tracked items and message summaries (raw pasted text is never sent) |
+| `POST /api/gate` | Builds a gate review for a date range: counts, progress and RAG are computed from the data; Gemini writes only the short executive summary from titles and counts (a plain-text fallback is used if Gemini is unavailable) |
 | `GET /api/state` | Restores the visitor's queue and the items on record |
 | `GET /api/seed` | (Re)loads the demo data; `?reset=1` also wipes every visitor sandbox |
 
@@ -94,21 +95,25 @@ Connecting to company mail and chat usually means a long IT security review. Pas
 - A **morning brief generated from the items on record** (what is close to its deadline, which closed decisions to watch), not hard-coded text
 - **Status tab**: pending / open / done / dismissed counts per workstream, an **Open actions** list with *Mark done* (and *View original message*), and a **filterable history** of every message showing what happened to it (confirmed, edited, dismissed, done), including the original proposal next to your edited version
 - **Ask Åttapus**: one question box (no chat thread, nothing stored) that Gemini answers only from what is already tracked, with a *Based on* list showing which items it used. It also writes status updates on request.
-- Workstreams view
+- **Gate review one-pager**: pick two dates (and optionally one workstream) and get a single page with an executive summary, an overall and per-workstream RAG, progress bars, what is in progress, what is at risk and what needs a decision. Counts and RAG come straight from the data (rules shown on the page); Gemini only writes the summary. Print / save as PDF uses the browser's print, and the page can be copied as text or markdown. Nothing is stored.
+- **Add to Google Calendar**: open items get a prefilled Google Calendar link (due date as an all-day event, or a 9:00 nudge tomorrow if there is no deadline). It is a link, not a sync: no sign-in and nothing stored.
+- Workstreams view with shortcuts into the Status tab and History
 - Light and dark themes
 
 **Not built yet (honest list):**
 - Screenshot / image ingestion (the tab is there; it is on the roadmap)
 - Live Outlook / Teams / SharePoint connectors (intentionally out of scope)
-- PowerPoint export of status updates (Ask Åttapus can write one as text today)
+- PowerPoint export (the gate review prints to PDF or copies as text or markdown)
+- Two-way Google Calendar sync (the Add to calendar link is one-way and needs no sign-in)
 - Vector retrieval for large histories (the demo history is small, so the full history goes into the prompt)
 
 ## Project structure
 
 ```
 public/index.html        Web UI (single file, no build step)
-functions/index.js       seedDemoData and classifyFragment (Cloud Functions)
-firebase.json            Hosting rewrites: /api/classify, /api/seed
+functions/index.js       Cloud Functions (seed, classify, state, resolve, complete, ask, gate)
+functions/gate.js        Gate review logic: date ranges, counts, RAG (no Firebase dependency)
+firebase.json            Hosting rewrites: /api/classify, /api/seed, /api/state, /api/resolve, /api/complete, /api/ask, /api/gate
 firestore.rules          Locks Firestore to server-side access only
 ```
 

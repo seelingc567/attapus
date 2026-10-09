@@ -172,6 +172,7 @@
   .q-action { font-size:12.5px; color:var(--text); display:flex; gap:8px; align-items:flex-start; flex:1 1 220px; }
   .q-action i { color:var(--brand-hi); margin-top:3px; }
   .q-btns { display:flex; gap:8px; }
+  .act-row .q-btns { flex-wrap:wrap; justify-content:flex-end; }
   .b-ghost { font-size:12px; padding:7px 12px; border-radius:9px; background:var(--surface-2); border:1px solid var(--line); color:var(--muted); }
   .b-ok { font-size:12px; font-weight:700; padding:7px 14px; border-radius:9px; background:var(--green); border:none; color:#fff; display:inline-flex; gap:6px; align-items:center; }
   .edit-wrap { display:flex; flex-direction:column; gap:8px; flex:1 1 280px; }
@@ -229,6 +230,12 @@
   .mini div { font-size:10.5px; color:var(--muted); }
   .mini b { display:block; font-size:17px; color:var(--text); }
   .sub-head { display:flex; justify-content:space-between; align-items:center; gap:10px; margin:24px 0 10px; }
+  .sub-head.divided { margin-top:26px; padding-top:20px; border-top:1px solid var(--line); }
+  .status-card { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:16px; box-shadow:var(--shadow); }
+  .status-card .sum-grid { margin-bottom:12px; }
+  .status-card .sum { background:var(--surface-2); }
+  .filter-bar { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:12px; padding:9px 12px; border-radius:12px; background:var(--brand-soft); color:var(--brand-text); font-size:12.5px; font-weight:600; }
+  .filter-bar .link-btn { margin-top:0; }
   .sub-head h3 { font-size:14px; font-weight:800; display:flex; gap:8px; align-items:center; }
   .sub-head h3 i { color:var(--brand-hi); }
   .sub-head small { font-size:11px; color:var(--faint); }
@@ -277,6 +284,79 @@
   .based { margin-top:10px; display:flex; gap:6px; flex-wrap:wrap; align-items:center; font-size:11px; color:var(--faint); }
   .based span.t { padding:2px 9px; border-radius:99px; background:var(--brand-soft); color:var(--brand-text); font-weight:600; }
 
+  /* ---------- Gate review (one-pager) ---------- */
+  .modal.wide { max-width:880px; }
+  .mode-tabs { display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+  .g-lbl { font-size:10.5px; font-weight:700; letter-spacing:.06em; color:var(--faint); margin:14px 0 8px; }
+  .g-lead { font-size:13px; color:var(--muted); }
+  .gate-dates { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; }
+  .gate-dates label { display:flex; flex-direction:column; gap:6px; font-size:10.5px; font-weight:700; letter-spacing:.06em; color:var(--faint); }
+  .gate-dates input { min-height:44px; padding:0 12px; border-radius:12px; border:1px solid var(--line); background:var(--input); color:var(--text); font-family:inherit; font-size:14px; }
+  .gate-dates .arrow { padding-bottom:12px; color:var(--faint); }
+  .gate-go { margin-top:18px; width:100%; min-height:48px; }
+  .gate-acts { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
+  .status-top { display:flex; justify-content:flex-end; margin-bottom:10px; }
+  .cal { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:600; padding:5px 10px; border-radius:8px; border:1px solid var(--line); background:var(--surface-2); color:var(--brand-text); text-decoration:none; white-space:nowrap; }
+  .cal:hover { border-color:var(--brand); }
+
+  .paper { background:#fff; color:#0f172a; border:1px solid #e0e4ee; border-radius:16px; padding:22px; font-size:13px; }
+  .paper .p-eyebrow { font-size:11px; font-weight:700; letter-spacing:.08em; color:#4338ca; }
+  .paper .p-head { display:flex; justify-content:space-between; align-items:flex-start; gap:14px; flex-wrap:wrap; }
+  .paper .p-title { font-size:24px; font-weight:800; letter-spacing:-.015em; margin-top:3px; }
+  .paper .p-sub { font-size:12px; color:#475569; margin-top:2px; }
+  .paper .p-overall { border:1px solid #e0e4ee; border-radius:12px; padding:8px 14px; display:flex; gap:10px; align-items:center; background:#f7f8fc; }
+  .paper .p-overall small { display:block; font-size:10px; font-weight:700; letter-spacing:.06em; color:#475569; }
+  .paper .p-overall b { font-size:15px; font-weight:800; }
+  .paper .p-dot { width:12px; height:12px; border-radius:50%; flex:none; }
+  .paper .p-card { background:#f7f8fc; border:1px solid #e0e4ee; border-radius:14px; padding:14px 16px; margin-top:12px; }
+  .paper h4 { margin:0 0 8px; font-size:11px; letter-spacing:.06em; font-weight:700; color:#4338ca; display:flex; justify-content:space-between; gap:8px; }
+  .paper h4 small { font-weight:500; letter-spacing:0; color:#64748b; font-size:11px; }
+  .paper .p-sum { font-size:14px; line-height:1.6; }
+  .paper .p-kpis { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; margin-top:12px; }
+  .paper .p-kpi { text-align:center; border:1px solid #e0e4ee; border-radius:12px; padding:10px 6px; background:#fff; }
+  .paper .p-kpi b { display:block; font-size:24px; line-height:1; }
+  .paper .p-kpi small { display:block; margin-top:5px; font-size:11px; color:#475569; font-weight:600; }
+  .paper .p-ws { margin-bottom:14px; }
+  .paper .p-ws:last-of-type { margin-bottom:0; }
+  .paper .p-ws-top { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:6px; }
+  .paper .p-ws-top b { font-size:13.5px; }
+  .paper .p-ws-top span.c { font-size:12px; color:#475569; margin-right:8px; }
+  .paper .p-bar { height:9px; border-radius:99px; background:#e5e8f2; overflow:hidden; }
+  .paper .p-bar > div { height:100%; border-radius:99px; }
+  .paper .p-note { font-size:11.5px; color:#64748b; margin-top:5px; }
+  .paper .rag { font-family:'JetBrains Mono', ui-monospace, monospace; font-size:10px; font-weight:600; padding:3px 9px; border-radius:99px; white-space:nowrap; }
+  .paper .rag-green { background:#d1fae5; color:#065f46; }
+  .paper .rag-amber { background:#fef3c7; color:#92400e; }
+  .paper .rag-red { background:#ffe4e6; color:#9f1239; }
+  .paper .rag-none { background:#e5e8f2; color:#475569; }
+  .paper .p-cols { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+  .paper .p-item { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; padding:8px 0; border-bottom:1px solid #e0e4ee; }
+  .paper .p-item:last-child { border-bottom:none; padding-bottom:0; }
+  .paper .p-item:first-of-type { padding-top:0; }
+  .paper .p-item b { font-size:13px; display:block; }
+  .paper .p-item .m { font-size:11.5px; color:#475569; margin-top:2px; line-height:1.45; }
+  .paper .p-right { display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex:none; }
+  .paper .p-none { font-size:12px; color:#64748b; }
+  .paper .p-done { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px 22px; font-size:12.5px; }
+  .paper .p-done div { display:flex; justify-content:space-between; gap:8px; }
+  .paper .p-done .d { font-family:'JetBrains Mono', ui-monospace, monospace; font-size:10.5px; color:#64748b; white-space:nowrap; }
+  .paper .p-foot { margin-top:12px; font-size:11.5px; color:#64748b; line-height:1.5; }
+  .paper .cal { background:#fff; border-color:#e0e4ee; color:#4338ca; }
+  @media (max-width:700px) {
+    .paper .p-kpis { display:flex; flex-wrap:wrap; }
+    .paper .p-kpi { flex:1 1 90px; }
+    .paper .p-cols, .paper .p-done { grid-template-columns:1fr; }
+  }
+  @media print {
+    html, body { height:auto !important; overflow:visible !important; background:#fff !important; display:block !important; }
+    body.print-gate > *:not(#overlay) { display:none !important; }
+    body.print-gate #overlay { position:static !important; display:block !important; background:none !important; padding:0 !important; backdrop-filter:none !important; }
+    body.print-gate .modal { max-width:none !important; max-height:none !important; border:none !important; box-shadow:none !important; background:#fff !important; overflow:visible !important; }
+    body.print-gate .modal-head, body.print-gate .modal-foot, body.print-gate .mode-tabs, body.print-gate #gateForm, body.print-gate .gate-acts, body.print-gate .cal, body.print-gate #askPane { display:none !important; }
+    body.print-gate .modal-body { padding:0 !important; }
+    body.print-gate .paper { border:none; padding:0; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  }
+
   /* ---------- Responsive: iPad portrait / phone ---------- */
   @media (max-width: 900px) {
     body { overflow:auto; display:block; }
@@ -303,7 +383,7 @@
   </div>
   <div class="head-right">
     <div class="pill"><span class="dot"></span><span>Gemini memory active</span><span style="opacity:.4">|</span><span>3 workstreams</span></div>
-    <button class="btn" onclick="openAsk()"><i class="fa-solid fa-wand-magic-sparkles"></i><span class="lbl">Ask Åttapus</span></button>
+    <button class="btn" onclick="openAsk()" aria-label="Ask Åttapus"><i class="fa-solid fa-wand-magic-sparkles"></i><span class="lbl">Ask Åttapus</span></button>
     <button class="btn icon-btn" id="themeBtn" onclick="toggleTheme()" aria-label="Toggle light or dark mode"><i class="fa-solid fa-sun"></i></button>
     <div class="avatar" title="Seeling">S</div>
   </div>
@@ -426,21 +506,45 @@
 
 <!-- Ask Åttapus: one question, answered from what is already tracked -->
 <div class="overlay" id="overlay" onclick="if(event.target===this)closeAsk()">
-  <div class="modal">
+  <div class="modal" id="modal">
     <div class="modal-head">
-      <div><h3>Ask Åttapus</h3><p>One question, answered from what is already tracked. Ask for a status update too.</p></div>
+      <div><h3 id="askTitle">Ask Åttapus</h3><p id="askSub">One question, answered from what is already tracked. Ask for a status update too.</p></div>
       <button class="x" onclick="closeAsk()" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
-      <div class="ask-chips" id="askChips"></div>
-      <div class="ask-box">
-        <textarea id="askInput" maxlength="300" rows="2" placeholder="e.g. What's at risk right now?"></textarea>
-        <button class="btn-main ask-go" id="askGo" onclick="askNow()">Ask</button>
+      <div class="mode-tabs">
+        <button class="chip-f active" id="modeAsk" onclick="setMode('ask')">Ask a question</button>
+        <button class="chip-f" id="modeGate" onclick="setMode('gate')">Gate review</button>
       </div>
-      <div id="askOut"></div>
+
+      <div id="askPane">
+        <div class="ask-chips" id="askChips"></div>
+        <div class="ask-box">
+          <textarea id="askInput" maxlength="300" rows="2" placeholder="e.g. What's at risk right now?"></textarea>
+          <button class="btn-main ask-go" id="askGo" onclick="askNow()">Ask</button>
+        </div>
+        <div id="askOut"></div>
+      </div>
+
+      <div id="gatePane" style="display:none">
+        <div id="gateForm">
+          <p class="g-lead">A one-page status between two dates, for a gate or milestone review. Counts come from your items; Gemini only writes the summary.</p>
+          <div class="g-lbl">QUICK RANGE</div>
+          <div class="ask-chips" id="gateQuick"></div>
+          <div class="gate-dates">
+            <label for="gateFrom">FROM<input type="date" id="gateFrom"></label>
+            <span class="arrow">→</span>
+            <label for="gateTo">TO<input type="date" id="gateTo"></label>
+          </div>
+          <div class="g-lbl">WORKSTREAMS</div>
+          <div class="ask-chips" id="gateWs"></div>
+          <button class="btn-main gate-go" id="gateGo" onclick="gateRun()">Generate gate review</button>
+        </div>
+        <div id="gateOut"></div>
+      </div>
     </div>
     <div class="modal-foot">
-      <span>Answers use only your tracked items and message summaries.</span>
+      <span id="footNote">Answers use only your tracked items and message summaries.</span>
       <button class="btn" id="askCopy" onclick="copyAnswer()" style="display:none"><i class="fa-regular fa-copy"></i><span id="copyLbl">Copy answer</span></button>
     </div>
   </div>
@@ -1036,18 +1140,29 @@ function renderStatus() {
   const dismissed = history.filter(f => f.status === 'dismissed' && inWs(f.ws));
   const logged = history.filter(f => outcome(f).k === 'logged' && inWs(f.ws));
   const sh = (icon, title, sub) => {
-    const d = h('div', 'sub-head'), t = h('h3');
+    const d = h('div', 'sub-head divided'), t = h('h3');
     t.append(h('i', 'fa-solid ' + icon), document.createTextNode(' ' + title)); d.append(t);
     if (sub) d.append(h('small', null, sub));
     return d;
   };
+
+  const stTop = h('div', 'status-top'), gb = h('button', 'btn');
+  gb.append(h('i', 'fa-solid fa-file-lines'), document.createTextNode(' Gate review one-pager')); gb.onclick = () => openAsk('gate');
+  stTop.append(gb); root.append(stTop);
 
   // headline numbers
   const sg = h('div', 'sum-grid');
   [['Pending review', pending.length, 'var(--brand-hi)'], ['Open actions', open.length, 'var(--amber)'], ['Done', done.length, 'var(--green)'], ['Dismissed', dismissed.length, 'var(--faint)'], ['Logged', logged.length, 'var(--cyan)']].forEach(([l, n, c]) => {
     const d = h('div', 'sum'), b = h('b', null, String(n)); b.style.color = c; d.append(b, h('small', null, l)); sg.append(d);
   });
-  root.append(sg);
+  const card = h('div', 'status-card');
+  if (wsFilter !== 'all') {
+    const fb = h('div', 'filter-bar');
+    fb.append(h('span', null, 'Showing ' + WORKSTREAMS[wsFilter].name + ' only'));
+    const cb = h('button', 'link-btn', 'Show all'); cb.onclick = () => { wsFilter = 'all'; renderStatus(); }; fb.append(cb);
+    card.append(fb);
+  }
+  card.append(sg);
 
   // per workstream
   const wg = h('div', 'wsum');
@@ -1062,13 +1177,8 @@ function renderStatus() {
       .forEach(([l, n]) => { const d = h('div'); d.append(h('b', null, String(n)), document.createTextNode(l)); mini.append(d); });
     box.append(hd, mini); wg.append(box);
   });
-  root.append(wg);
-  if (wsFilter !== 'all') {
-    const fb = h('div', 'follow'); fb.style.margin = '10px 0 0';
-    fb.append(document.createTextNode('Showing ' + WORKSTREAMS[wsFilter].name + ' only. '));
-    const cb = h('button', 'link-btn', 'Show all'); cb.style.marginTop = '0'; cb.onclick = () => { wsFilter = 'all'; renderStatus(); }; fb.append(cb);
-    root.append(fb);
-  }
+  card.append(wg);
+  root.append(card);
 
   // open actions
   root.append(sh('fa-list-check', 'Open actions', open.length ? 'Confirmed, still waiting on you' : ''));
@@ -1100,6 +1210,7 @@ function renderStatus() {
     if (src) { const lb = h('button', 'link-btn', openRows.has(key) ? 'Hide original message' : 'View original message'); lb.onclick = () => toggleRow(key); main.append(lb); }
     const act = h('div', 'q-btns'), ok = h('button', 'b-ok');
     ok.append(h('i', 'fa-solid fa-check'), document.createTextNode(doneLabel(i))); ok.onclick = () => setDone(i.id, true); act.append(ok);
+    act.append(calLink({ title: i.title, wsName: wsLabel(i.workstreamId), due: i.dueDate, summary: i.summary }));
     top.append(main, act); row.append(top);
     if (src && openRows.has(key)) { const dd = h('div', 'row-detail'); dd.append(h('span', 'lbl', 'ORIGINAL MESSAGE'), h('div', 'snippet', src.snippet)); row.append(dd); }
     root.append(row);
@@ -1158,11 +1269,12 @@ function renderStatus() {
 /* ============ Ask Åttapus: one question, answered from what is tracked ============ */
 const ASK_CHIPS = ["What's at risk right now?", "What changed since yesterday?", "Latest on Marketing Campaign?"];
 let askBusy = false, lastAnswer = '';
-function openAsk() {
+function openAsk(mode) {
   const chips = $('askChips');
   if (!chips.childElementCount) ASK_CHIPS.forEach(q => { const b = h('button', 'chip-f', q); b.onclick = () => askNow(q); chips.append(b); });
   $('overlay').classList.add('on');
-  setTimeout(() => $('askInput').focus(), 50);
+  setMode(mode === 'gate' ? 'gate' : 'ask');
+  if (mode !== 'gate') setTimeout(() => $('askInput').focus(), 50);
 }
 function closeAsk() { $('overlay').classList.remove('on'); }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAsk(); });
@@ -1193,6 +1305,210 @@ async function copyAnswer() {
   try { await navigator.clipboard.writeText(lastAnswer); }
   catch (e) { const ta = document.createElement('textarea'); ta.value = lastAnswer; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch (e2) {} document.body.removeChild(ta); }
   $('copyLbl').textContent = 'Copied!'; setTimeout(() => { $('copyLbl').textContent = 'Copy answer'; }, 1800);
+}
+
+/* ============ Add to Google Calendar (a prefilled link, no sign-in, nothing stored) ============ */
+function calUrl(o) {
+  const p2 = n => String(n).padStart(2, '0'), ymd = d => d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate());
+  let dates;
+  if (o.due) {                                   // all-day event on the due date
+    const d = new Date(o.due), n = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+    dates = ymd(d) + '/' + ymd(n);
+  } else {                                       // no deadline: a 30-minute nudge tomorrow at 9:00
+    const d = new Date(); d.setDate(d.getDate() + 1);
+    dates = ymd(d) + 'T090000/' + ymd(d) + 'T093000';
+  }
+  const q = { action:'TEMPLATE', text:'Follow up: ' + o.title + (o.wsName ? ' (' + o.wsName + ')' : ''),
+    details:((o.summary ? 'Next: ' + o.summary + '\n\n' : '') + 'Added from Åttapus'), dates };
+  return 'https://calendar.google.com/calendar/render?' + Object.keys(q).map(k => k + '=' + encodeURIComponent(q[k])).join('&');
+}
+function calLink(o) {
+  const a = h('a', 'cal'); a.href = calUrl(o); a.target = '_blank'; a.rel = 'noopener noreferrer';
+  a.title = o.due ? 'Add the due date to Google Calendar' : 'Add a reminder for tomorrow 9:00 to Google Calendar';
+  a.append(h('i', 'fa-regular fa-calendar-plus'), document.createTextNode('Add to calendar'));
+  a.onclick = e => e.stopPropagation();
+  return a;
+}
+
+/* ============ Gate review: a one-page status between two dates ============ */
+let gateWs = 'all', gateBusy = false, lastGate = null;
+const RAG = { green:{ t:'GREEN', c:'#059669' }, amber:{ t:'AMBER', c:'#d97706' }, red:{ t:'RED', c:'#e11d48' }, none:{ t:'NO DATA', c:'#94a3b8' } };
+const p2 = n => String(n).padStart(2, '0');
+const ymdLocal = d => d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate());
+const dayLbl = (s, year) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString('en-SG', year ? { day:'numeric', month:'short', year:'numeric' } : { day:'numeric', month:'short' }); };
+const shortD = iso => new Date(iso).toLocaleDateString('en-SG', { day:'numeric', month:'short' });
+function dueTxt(iso) {
+  const d = Math.ceil((new Date(iso) - Date.now()) / 864e5);
+  return d < 0 ? 'overdue' : d === 0 ? 'due today' : d === 1 ? 'due tomorrow' : 'due in ' + d + ' days';
+}
+function lastGateEnd() { try { return localStorage.getItem('attapus-last-gate'); } catch (e) { return null; } }
+
+function setMode(m) {
+  const gate = m === 'gate';
+  $('askPane').style.display = gate ? 'none' : '';
+  $('gatePane').style.display = gate ? '' : 'none';
+  $('modeAsk').classList.toggle('active', !gate);
+  $('modeGate').classList.toggle('active', gate);
+  $('modal').classList.toggle('wide', gate);
+  $('askTitle').textContent = gate ? 'Gate review' : 'Ask Åttapus';
+  $('askSub').textContent = gate ? 'A one-page status between two dates.' : 'One question, answered from what is already tracked. Ask for a status update too.';
+  $('footNote').textContent = gate ? 'Counts come from your items. Nothing is stored.' : 'Answers use only your tracked items and message summaries.';
+  $('askCopy').style.display = !gate && lastAnswer && $('askOut').childElementCount ? '' : 'none';
+  if (gate) gateInit();
+}
+function setRange(from, to) { $('gateFrom').value = from; $('gateTo').value = to; }
+function gateInit() {
+  if (!$('gateQuick').childElementCount) {
+    const today = new Date(), back = n => { const d = new Date(); d.setDate(d.getDate() - n); return ymdLocal(d); };
+    const opts = [['Last 7 days', back(7)], ['Last 14 days', back(14)], ['Last 30 days', back(30)]];
+    const lg = lastGateEnd();
+    if (lg && /^\d{4}-\d{2}-\d{2}$/.test(lg)) opts.unshift(['Since last gate · ' + dayLbl(lg), lg]);
+    opts.forEach(([l, from]) => { const b = h('button', 'chip-f', l); b.onclick = () => setRange(from, ymdLocal(today)); $('gateQuick').append(b); });
+    setRange(back(14), ymdLocal(today));
+  }
+  const wsBox = $('gateWs'); wsBox.replaceChildren();
+  [['all', 'All three'], ...WS_ORDER.map(k => [k, WORKSTREAMS[k].name])].forEach(([k, l]) => {
+    const b = h('button', 'chip-f' + (gateWs === k ? ' active' : ''), l); b.onclick = () => { gateWs = k; gateInit(); }; wsBox.append(b);
+  });
+}
+function gateEdit() { $('gateForm').style.display = ''; $('gateOut').replaceChildren(); lastGate = null; }
+async function gateRun() {
+  const from = $('gateFrom').value, to = $('gateTo').value, out = $('gateOut');
+  if (gateBusy) return;
+  if (!from || !to) { out.replaceChildren(h('div', 'ask-status', 'Pick a start and an end date.')); return; }
+  if (from > to) { out.replaceChildren(h('div', 'ask-status', 'The end date is before the start date.')); return; }
+  gateBusy = true; $('gateGo').disabled = true;
+  out.replaceChildren(h('div', 'ask-status', 'Building your gate review…'));
+  const slow = setTimeout(() => { out.replaceChildren(h('div', 'ask-status', 'Still working — Gemini is busy, the counts are ready and the summary is retrying…')); }, 8000);
+  const controller = new AbortController(), abort = setTimeout(() => controller.abort(), 60000);
+  try {
+    const resp = await fetch('/api/gate', { method:'POST', headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ sid, from, to, ws: gateWs, tz: -new Date().getTimezoneOffset() }), signal: controller.signal });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.ok) throw new Error(data.error || ('HTTP ' + resp.status));
+    lastGate = data;
+    try { localStorage.setItem('attapus-last-gate', to); } catch (e) {}
+    $('gateForm').style.display = 'none';
+    out.replaceChildren(renderGate(data));
+  } catch (err) {
+    out.replaceChildren(h('div', 'ask-status', err.name === 'AbortError' ? 'That took too long. Try again in a moment.' : 'Could not build that (' + err.message + '). Try again.'));
+  } finally { clearTimeout(slow); clearTimeout(abort); gateBusy = false; $('gateGo').disabled = false; }
+}
+
+function renderGate(g) {
+  const wrap = h('div'), paper = h('div', 'paper'); paper.id = 'gatePaper';
+  const t = g.totals, ov = RAG[g.overall] || RAG.none;
+  const names = g.ws === 'all' ? g.workstreams.map(w => w.name).join(' · ') : (g.workstreams[0] ? g.workstreams[0].name : '');
+
+  const head = h('div', 'p-head'), hl = h('div');
+  hl.append(h('div', 'p-eyebrow', 'ÅTTAPUS · GATE REVIEW'), h('div', 'p-title', dayLbl(g.from) + ' → ' + dayLbl(g.to, true)), h('div', 'p-sub', names));
+  const od = h('div', 'p-overall'), dot = h('span', 'p-dot'); dot.style.background = ov.c;
+  const ot = h('div'); ot.append(h('small', null, 'OVERALL'), h('b', null, ov.t)); od.append(dot, ot);
+  head.append(hl, od); paper.append(head);
+
+  const sum = h('div', 'p-card'); sum.append(h('h4', null, 'EXECUTIVE SUMMARY'), h('div', 'p-sum', g.summary));
+  paper.append(sum);
+
+  const kp = h('div', 'p-kpis');
+  [['Logged', t.logged, '#065f46'], ['Completed', t.completed, '#065f46'], ['In progress', t.inProgress, '#4338ca'], ['At risk', t.atRisk, '#92400e'], ['Need decision', t.needDecision, '#9f1239']].forEach(([l, n, c]) => {
+    const d = h('div', 'p-kpi'), b = h('b', null, String(n)); b.style.color = c; d.append(b, h('small', null, l)); kp.append(d);
+  });
+  paper.append(kp);
+
+  const pg = h('div', 'p-card'); pg.append(h('h4', null, 'PROGRESS BY WORKSTREAM'));
+  const pgh = pg.firstChild; pgh.append(h('small', null, 'Resolved = logged or completed'));
+  g.workstreams.forEach(w => {
+    const r = RAG[w.rag] || RAG.none, box = h('div', 'p-ws'), top = h('div', 'p-ws-top'), right = h('div');
+    right.append(h('span', 'c', w.total ? w.resolved + ' of ' + w.total + ' resolved' : 'No items'), h('span', 'rag rag-' + w.rag, r.t));
+    top.append(h('b', null, w.name), right);
+    const bar = h('div', 'p-bar'), fill = h('div'); fill.style.width = w.progress + '%'; fill.style.background = r.c; bar.append(fill);
+    box.append(top, bar, h('div', 'p-note', w.note)); pg.append(box);
+  });
+  pg.append(h('div', 'p-note', 'RAG: Green = nothing flagged. Amber = an open item has gone quiet or a closed decision was superseded. Red = an item is overdue or urgent.'));
+  paper.append(pg);
+
+  const cols = h('div', 'p-cols');
+  const ip = h('div', 'p-card'); ip.append(h('h4', null, 'IN PROGRESS · ' + g.inProgress.length));
+  if (!g.inProgress.length) ip.append(h('div', 'p-none', 'Nothing open.'));
+  g.inProgress.slice(0, 6).forEach(i => {
+    const row = h('div', 'p-item'), m = h('div');
+    const meta = [i.wsName]; if (i.silentDays >= 1) meta.push('silent ' + i.silentDays + ' day' + (i.silentDays === 1 ? '' : 's')); if (i.due) meta.push(dueTxt(i.due));
+    m.append(h('b', null, i.title), h('div', 'm', meta.join(' · ')));
+    const rt = h('div', 'p-right'); if (i.atRisk) rt.append(h('span', 'rag rag-amber', 'AT RISK'));
+    rt.append(calLink(i)); row.append(m, rt); ip.append(row);
+  });
+  if (g.inProgress.length > 6) ip.append(h('div', 'p-note', '+ ' + (g.inProgress.length - 6) + ' more in the Status tab'));
+  const nd = h('div', 'p-card'); nd.append(h('h4', null, 'NEEDS YOUR DECISION · ' + g.needDecision.length));
+  if (!g.needDecision.length) nd.append(h('div', 'p-none', 'No decisions waiting.'));
+  g.needDecision.slice(0, 5).forEach(i => {
+    const row = h('div', 'p-item'), m = h('div');
+    m.append(h('b', null, i.title), h('div', 'm', i.wsName + (i.due ? ' · ' + dueTxt(i.due) : '') + (i.summary ? ' · Next: ' + i.summary : '')));
+    row.append(m, calLink(i)); nd.append(row);
+  });
+  cols.append(ip, nd); paper.append(cols);
+
+  if (g.superseded.length) {
+    const sp = h('div', 'p-card'); sp.append(h('h4', null, 'SUPERSEDED · ' + g.superseded.length));
+    g.superseded.forEach(i => { const row = h('div', 'p-item'), m = h('div'); m.append(h('b', null, i.title), h('div', 'm', i.wsName + ' · superseded ' + shortD(i.date))); row.append(m); sp.append(row); });
+    paper.append(sp);
+  }
+
+  const done = [...g.logged.map(i => ({ ...i, kind:'Logged' })), ...g.completed.map(i => ({ ...i, kind:'Completed' }))].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const dn = h('div', 'p-card'); dn.append(h('h4', null, 'DONE THIS PERIOD · ' + done.length));
+  if (!done.length) dn.append(h('div', 'p-none', 'Nothing logged or completed in this period.'));
+  const dg = h('div', 'p-done');
+  done.slice(0, 10).forEach(i => { const r = h('div'), l = h('span'); l.append(h('b', null, i.wsName), document.createTextNode(' · ' + i.title)); r.append(l, h('span', 'd', shortD(i.date))); dg.append(r); });
+  dn.append(dg); if (done.length > 10) dn.append(h('div', 'p-note', '+ ' + (done.length - 10) + ' more'));
+  paper.append(dn);
+
+  paper.append(h('div', 'p-foot', 'Based on ' + t.items + ' item' + (t.items === 1 ? '' : 's') + ' on record' + (t.pending ? '. ' + t.pending + ' message' + (t.pending === 1 ? '' : 's') + ' awaiting your review ' + (t.pending === 1 ? 'is' : 'are') + ' not counted' : '') + '. Dismissed messages are left out. ' + (g.summarySource === 'gemini' ? 'Summary written by Gemini from titles and counts.' : 'Summary generated without Gemini.') + ' Nothing is stored.'));
+  wrap.append(paper);
+
+  const acts = h('div', 'gate-acts');
+  const mk = (icon, label, fn, cls) => { const b = h('button', cls || 'btn'); b.append(h('i', icon), document.createTextNode(' ' + label)); b.onclick = fn; acts.append(b); return b; };
+  mk('fa-solid fa-print', 'Print / save as PDF', printGate, 'btn-main');
+  mk('fa-regular fa-copy', 'Copy as text', e => copyGate(false, e.currentTarget));
+  mk('fa-brands fa-markdown', 'Copy as markdown', e => copyGate(true, e.currentTarget));
+  mk('fa-solid fa-sliders', 'Change range', gateEdit);
+  wrap.append(acts);
+  return wrap;
+}
+
+function printGate() {
+  document.body.classList.add('print-gate');
+  const done = () => { document.body.classList.remove('print-gate'); window.removeEventListener('afterprint', done); };
+  window.addEventListener('afterprint', done);
+  setTimeout(() => window.print(), 50);
+  setTimeout(done, 60000);
+}
+function gateAsText(g, md) {
+  const L = [], t = g.totals, H = s => md ? '## ' + s : s.toUpperCase(), B = md ? '- ' : '- ';
+  L.push(md ? '# Gate review: ' + dayLbl(g.from) + ' → ' + dayLbl(g.to, true) : 'GATE REVIEW: ' + dayLbl(g.from) + ' → ' + dayLbl(g.to, true));
+  L.push('Overall: ' + (RAG[g.overall] || RAG.none).t, '');
+  L.push(H('Executive summary'), g.summary, '');
+  L.push(H('Counts'), 'Logged ' + t.logged + ' · Completed ' + t.completed + ' · In progress ' + t.inProgress + ' · At risk ' + t.atRisk + ' · Need decision ' + t.needDecision, '');
+  L.push(H('Progress by workstream'));
+  g.workstreams.forEach(w => L.push(B + w.name + ': ' + (RAG[w.rag] || RAG.none).t + ', ' + (w.total ? w.resolved + ' of ' + w.total + ' resolved (' + w.progress + '%)' : 'no items') + '. ' + w.note));
+  L.push('', H('In progress (' + g.inProgress.length + ')'));
+  g.inProgress.forEach(i => L.push(B + i.title + ' (' + i.wsName + ')' + (i.atRisk ? ' [AT RISK]' : '') + (i.due ? ', ' + dueTxt(i.due) : '')));
+  if (!g.inProgress.length) L.push('Nothing open.');
+  L.push('', H('Needs your decision (' + g.needDecision.length + ')'));
+  g.needDecision.forEach(i => L.push(B + i.title + ' (' + i.wsName + ')' + (i.summary ? ', next: ' + i.summary : '')));
+  if (!g.needDecision.length) L.push('No decisions waiting.');
+  if (g.superseded.length) { L.push('', H('Superseded (' + g.superseded.length + ')')); g.superseded.forEach(i => L.push(B + i.title + ' (' + i.wsName + '), ' + shortD(i.date))); }
+  const done = [...g.logged.map(i => ({ ...i, kind:'Logged' })), ...g.completed.map(i => ({ ...i, kind:'Completed' }))].sort((a, b) => new Date(b.date) - new Date(a.date));
+  L.push('', H('Done this period (' + done.length + ')'));
+  done.forEach(i => L.push(B + i.title + ' (' + i.wsName + '), ' + i.kind.toLowerCase() + ' ' + shortD(i.date)));
+  if (!done.length) L.push('Nothing logged or completed.');
+  L.push('', 'Based on ' + t.items + ' items on record. Generated by Åttapus.');
+  return L.join('\n');
+}
+async function copyGate(md, btn) {
+  if (!lastGate) return;
+  const text = gateAsText(lastGate, md), lbl = btn.lastChild, old = lbl.textContent;
+  try { await navigator.clipboard.writeText(text); }
+  catch (e) { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch (e2) {} document.body.removeChild(ta); }
+  lbl.textContent = ' Copied!'; setTimeout(() => { lbl.textContent = old; }, 1800);
 }
 
 renderAll();

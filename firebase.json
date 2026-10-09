@@ -30,6 +30,10 @@
       {
         "source": "/api/ask",
         "function": "askAttapus"
+      },
+      {
+        "source": "/api/gate",
+        "function": "gateReview"
       }
     ]
   },
