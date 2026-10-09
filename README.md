@@ -77,6 +77,10 @@ The seeded demo history is shared, but everything a visitor does on top of it (t
 | `GET /api/state` | Restores the visitor's queue and the items on record |
 | `GET /api/seed` | (Re)loads the demo data; `?reset=1` also wipes every visitor sandbox |
 
+### Usage limits on the public demo
+
+The Gemini-backed endpoints are public, so each is protected by a usage limit: 40 AI calls per visitor per hour, 80 per network address per hour (stored only as a short hash, so rotating the session id does not get around it), and 1,500 per day across everyone as a circuit breaker on cost. A refused request uses none of the allowance. The gate review's counts are free; only its Gemini-written summary spends a call, and when the allowance is used up the report still returns with a plain-text summary.
+
 ### Why paste instead of a live Outlook/Teams connection?
 
 Connecting to company mail and chat usually means a long IT security review. Pasting works on day one, with no approval and nothing leaving the user's control. Live connectors are a roadmap item, not part of this build.
@@ -85,6 +89,7 @@ Connecting to company mail and chat usually means a long IT security review. Pas
 
 **Built and working:**
 - Paste capture with multi-item input (separate messages with `---`)
+- **Screenshot reading (Gemini multimodal)**: choose or paste a screenshot of a chat or email, optionally add a note, and Gemini reads the text in it and files it through the same review queue. The image is shrunk in the browser, sent once, and **never stored**: only the text Gemini read is kept, and the history labels it *Read from screenshot*. Best for screenshots of typed chats and emails; handwriting is not a tested use.
 - Live Gemini classification against stored history, with contradiction and going-quiet detection
 - Review queue with **Confirm / Dismiss that saves to Firestore**: a confirmed item joins the history Gemini checks next time, and a confirmed contradiction reopens the closed decision
 - **Follow-ups update instead of duplicating**: when a message is a chaser or update about an open item, Gemini links it to that item, and confirming it replaces the old item (keeping its deadline) rather than creating a second one
@@ -101,7 +106,6 @@ Connecting to company mail and chat usually means a long IT security review. Pas
 - Light and dark themes
 
 **Not built yet (honest list):**
-- Screenshot / image ingestion (the tab is there; it is on the roadmap)
 - Live Outlook / Teams / SharePoint connectors (intentionally out of scope)
 - PowerPoint export (the gate review prints to PDF or copies as text or markdown)
 - Two-way Google Calendar sync (the Add to calendar link is one-way and needs no sign-in)
@@ -113,6 +117,7 @@ Connecting to company mail and chat usually means a long IT security review. Pas
 public/index.html        Web UI (single file, no build step)
 functions/index.js       Cloud Functions (seed, classify, state, resolve, complete, ask, gate)
 functions/gate.js        Gate review logic: date ranges, counts, RAG (no Firebase dependency)
+functions/limits.js      Usage limits for the Gemini endpoints
 firebase.json            Hosting rewrites: /api/classify, /api/seed, /api/state, /api/resolve, /api/complete, /api/ask, /api/gate
 firestore.rules          Locks Firestore to server-side access only
 ```

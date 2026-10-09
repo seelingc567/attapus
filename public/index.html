@@ -86,6 +86,13 @@
   .capture { padding:12px 20px 0; display:flex; flex-direction:column; gap:10px; }
   .note { display:none; font-size:12px; color:var(--muted); background:var(--surface-2); border:1px dashed var(--line); border-radius:10px; padding:10px 12px; }
   .note.on { display:block; }
+  .shot-empty { display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:12.5px; color:var(--muted); }
+  .shot-prev { display:flex; align-items:center; gap:12px; }
+  .shot-prev img { width:64px; height:64px; object-fit:cover; border-radius:10px; border:1px solid var(--line); flex:none; background:var(--input); }
+  .shot-meta { min-width:0; flex:1; }
+  .shot-meta b { display:block; font-size:12.5px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .shot-meta small { font-size:11px; color:var(--faint); }
+  .shot-hint { display:block; margin-top:8px; font-size:11px; color:var(--faint); line-height:1.4; }
   textarea {
     width:100%; min-height:170px; resize:vertical; padding:12px 14px; border-radius:12px;
     background:var(--input); border:1px solid var(--line); color:var(--text);
@@ -416,7 +423,19 @@
     </div>
 
     <div class="capture">
-      <div class="note" id="shotNote">Reading screenshots with Gemini's multimodal input is next on the roadmap. For this build, paste the text.</div>
+      <div class="note" id="shotNote">
+        <input type="file" id="shotFile" accept="image/*" hidden onchange="pickShot(this)">
+        <div class="shot-empty" id="shotEmpty">
+          <button class="btn" type="button" onclick="$('shotFile').click()"><i class="fa-solid fa-image"></i><span>Choose image</span></button>
+          <span>or paste a screenshot here</span>
+        </div>
+        <div class="shot-prev" id="shotPrev" style="display:none">
+          <img id="shotImg" alt="Screenshot preview">
+          <div class="shot-meta"><b id="shotName"></b><small id="shotSize"></small></div>
+          <button class="b-ghost" type="button" onclick="clearShot()">Remove</button>
+        </div>
+        <small class="shot-hint">Gemini reads the text in the image and files it like any pasted message. The image itself is not stored.</small>
+      </div>
       <textarea id="input" placeholder="Paste a messy email, chat snippet or meeting note here…"></textarea>
       <button class="btn-main" id="go" onclick="runCapture()"><i class="fa-solid fa-wand-magic-sparkles"></i><span>Let Åttapus read this</span></button>
       <div class="status" id="status" role="status"></div>
@@ -643,6 +662,7 @@ function setTab(el) {
   el.classList.add('active');
   activeSrc = el.dataset.src;
   $('shotNote').classList.toggle('on', activeSrc === 'Screenshot');
+  $('input').placeholder = activeSrc === 'Screenshot' ? 'Optional: add a note about this screenshot…' : 'Paste a messy email, chat snippet or meeting note here…';
 }
 function preset(key, el) {
   document.querySelectorAll('.preset').forEach(p => p.classList.remove('active'));
@@ -699,13 +719,13 @@ function kindOf(r) {
 }
 
 /* ============ Calling the live backend ============ */
-async function classify(text, source) {
+async function classify(text, source, image) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 60000);   // backend may retry Gemini 503s for ~30s
   try {
     const resp = await fetch('/api/classify', {
       method:'POST', headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ text, sid, source }), signal: controller.signal
+      body: JSON.stringify({ text, sid, source, image: image ? { mimeType: image.mimeType, data: image.data } : undefined }), signal: controller.signal
     });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data.ok) throw new Error(data.error || ('HTTP ' + resp.status));
@@ -726,7 +746,11 @@ function parseBlocks(raw) {
 
 async function runCapture() {
   if (busy) return;
-  const blocks = parseBlocks($('input').value);
+  if (shotLoad) await shotLoad;
+  if (activeSrc === 'Screenshot' && !pendingImage && !/^\[[^\]\n]{2,40}\]\s*\n/.test($('input').value.trim())) { toast('Choose or paste a screenshot first.'); return; }
+  const blocks = pendingImage
+    ? [{ src:'Screenshot', text:$('input').value.trim(), image:pendingImage }]   // one screenshot, with an optional note
+    : parseBlocks($('input').value);
   if (!blocks.length) { toast('Paste something first, or pick a scenario.'); return; }
 
   busy = true;
@@ -737,7 +761,7 @@ async function runCapture() {
   status.classList.add('on');
   const slow = setTimeout(() => { status.textContent = 'Still reading — Gemini is busy, retrying automatically…'; }, 8000);
 
-  const results = await Promise.allSettled(blocks.map(b => classify(b.text, b.src)));
+  const results = await Promise.allSettled(blocks.map(b => classify(b.text, b.src, b.image)));
 
   const fresh = [];
   results.forEach((res, i) => {
@@ -746,7 +770,7 @@ async function runCapture() {
       const r = res.value, k = kindOf(r);
       const item = {
         id: r.id || ('i' + Date.now() + '-' + i), ws: wsKey(r.workstreamId), wsLabel: wsLabel(r.workstreamId),
-        kind: k, title: r.summary || 'Fragment read', snippet: b.text, action: r.suggestedAction || '',
+        kind: k, title: r.summary || 'Fragment read', snippet: r.rawText || b.text, fromImage: !!r.fromImage, action: r.suggestedAction || '',
         conflict: r.contradictsItemId ? prettyId(r.contradictsItemId) : '', conflictId: r.contradictsItemId || null, src: b.src,
         risk: r.risk, at: new Date(), status: 'pending', related: r.relatedItemId || null
       };
@@ -763,6 +787,7 @@ async function runCapture() {
   });
 
   clearTimeout(slow);
+  if (pendingImage && fresh.some(f => f.item)) { clearShot(); $('input').value = ''; }
   busy = false;
   btn.disabled = false;
   btn.querySelector('span').textContent = 'Let Åttapus read this';
@@ -772,6 +797,59 @@ async function runCapture() {
   const ok = fresh.filter(f => f.item).length;
   toast(ok ? `Read ${ok} item${ok > 1 ? 's' : ''} — review queue updated` : 'Nothing could be read — see the retry card');
 }
+
+/* ============ Screenshot capture: read by Gemini, shrunk in the browser, never stored ============ */
+let pendingImage = null;     // { mimeType, data (base64), name, bytes, url }
+function setShot(img) {
+  pendingImage = img;
+  $('shotImg').src = img.url; $('shotName').textContent = img.name;
+  $('shotSize').textContent = Math.max(1, Math.round(img.bytes / 1024)) + ' KB, ready to read';
+  $('shotEmpty').style.display = 'none'; $('shotPrev').style.display = 'flex';
+}
+function clearShot() {
+  pendingImage = null; $('shotFile').value = '';
+  $('shotImg').removeAttribute('src');
+  $('shotEmpty').style.display = ''; $('shotPrev').style.display = 'none';
+}
+function pickShot(inp) { const f = inp.files && inp.files[0]; if (f) loadShot(f); }
+function toScreenshotTab() {
+  const t = [...document.querySelectorAll('.tab')].find(x => x.dataset.src === 'Screenshot');
+  if (t && activeSrc !== 'Screenshot') setTab(t);
+}
+async function shrinkImage(file) {
+  // Re-draw at a sensible size and save as JPEG: small and quick to send, and it also turns iPhone HEIC photos into something Gemini accepts.
+  const bmp = await createImageBitmap(file);
+  const encode = (maxSide, q) => new Promise((ok, no) => {
+    const k = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(bmp.width * k)); c.height = Math.max(1, Math.round(bmp.height * k));
+    const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(bmp, 0, 0, c.width, c.height);
+    c.toBlob(b => b ? ok(b) : no(new Error('encode')), 'image/jpeg', q);
+  });
+  let blob = await encode(1600, 0.85);
+  if (blob.size > 2400000) blob = await encode(1200, 0.7);
+  if (bmp.close) bmp.close();
+  return blob;
+}
+const blobToDataUrl = b => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => no(r.error); r.readAsDataURL(b); });
+let shotLoad = null;     // the image being prepared, so a quick tap on Read waits for it
+function loadShot(file) { shotLoad = loadShotNow(file).finally(() => { shotLoad = null; }); return shotLoad; }
+async function loadShotNow(file) {
+  if (!file.type.startsWith('image/')) { toast('That is not an image file.'); return; }
+  if (file.size > 25 * 1024 * 1024) { toast('That image is too large (max 25 MB).'); return; }
+  try {
+    const blob = await shrinkImage(file);
+    if (blob.size > 3000000) throw new Error('large');
+    const url = await blobToDataUrl(blob);
+    setShot({ mimeType:'image/jpeg', data: url.slice(url.indexOf(',') + 1), name: file.name || 'Pasted screenshot', bytes: blob.size, url });
+    toScreenshotTab();
+  } catch (e) { toast('Could not read that image. Try a different one, or paste the text.'); }
+}
+document.addEventListener('paste', e => {
+  const it = [...((e.clipboardData && e.clipboardData.items) || [])].find(x => x.kind === 'file' && x.type.startsWith('image/'));
+  if (!it) return;                       // plain text pastes behave as before
+  const f = it.getAsFile(); if (!f) return;
+  e.preventDefault(); toScreenshotTab(); loadShot(f);
+});
 
 /* ============ Rendering ============ */
 function timeStr(d) { return d.toLocaleTimeString('en-SG', { hour:'2-digit', minute:'2-digit' }); }
@@ -914,6 +992,7 @@ function retry(errItem) {
   renderAll();
   $('input').value = errItem.block.text;
   activeSrc = errItem.block.src;
+  if (errItem.block.image) { setShot(errItem.block.image); document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.src === 'Screenshot')); $('shotNote').classList.add('on'); }
   runCapture();
 }
 
@@ -1049,7 +1128,7 @@ function fragToItem(f) {
     conflict: f.contradictsItemId ? prettyId(f.contradictsItemId) : '', conflictId: f.contradictsItemId || null, src: f.source || 'Pasted',
     risk: f.risk, at: new Date(f.createdAt || Date.now()), status: f.status,
     resolvedAt: f.resolvedAt ? new Date(f.resolvedAt) : null, edited: !!f.edited,
-    originalAction: f.originalAction || null, itemId: f.itemId || null, related: f.relatedItemId || null
+    originalAction: f.originalAction || null, itemId: f.itemId || null, related: f.relatedItemId || null, fromImage: !!f.fromImage
   };
 }
 // Restore this visitor's session (pending queue + what is on record) from the server.
@@ -1069,7 +1148,7 @@ async function loadState() {
 function resetSession() {
   sid = newSid();
   try { localStorage.setItem('attapus-sid', sid); } catch (e) {}
-  queue = []; captured = []; history = []; wsFilter = 'all'; $('input').value = '';
+  queue = []; captured = []; history = []; wsFilter = 'all'; $('input').value = ''; clearShot();
   loadState();
   toast('Started a fresh session');
 }
@@ -1219,7 +1298,7 @@ function renderStatus() {
     ok.append(h('i', 'fa-solid fa-check'), document.createTextNode(doneLabel(i))); ok.onclick = () => setDone(i.id, true); act.append(ok);
     act.append(calLink({ title: i.title, wsName: wsLabel(i.workstreamId), due: i.dueDate, summary: i.summary }));
     top.append(main, act); row.append(top);
-    if (src && openRows.has(key)) { const dd = h('div', 'row-detail'); dd.append(h('span', 'lbl', 'ORIGINAL MESSAGE'), h('div', 'snippet', src.snippet)); row.append(dd); }
+    if (src && openRows.has(key)) { const dd = h('div', 'row-detail'); dd.append(h('span', 'lbl', src.fromImage ? 'READ FROM SCREENSHOT' : 'ORIGINAL MESSAGE'), h('div', 'snippet', src.snippet)); row.append(dd); }
     root.append(row);
   });
 
@@ -1263,7 +1342,7 @@ function renderStatus() {
     if (acts.children.length) row.append(acts);
     if (openRows.has(key)) {
       const dd = h('div', 'row-detail');
-      dd.append(h('span', 'lbl', 'ORIGINAL MESSAGE'), h('div', 'snippet', f.snippet));
+      dd.append(h('span', 'lbl', f.fromImage ? 'READ FROM SCREENSHOT' : 'ORIGINAL MESSAGE'), h('div', 'snippet', f.snippet));
       if (f.edited && f.originalAction) dd.append(h('span', 'lbl', 'ÅTTAPUS PROPOSED'), h('div', null, f.originalAction), h('span', 'lbl', 'YOUR VERSION'), h('div', null, f.action));
       else dd.append(h('span', 'lbl', 'PROPOSED ACTION'), h('div', null, f.action || '—'));
       row.append(dd);
