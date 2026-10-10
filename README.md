@@ -57,7 +57,7 @@ Pasted text ──► Firebase Hosting (web UI)
                     └──writes──► Firestore (fragments)  ──► review queue in the UI
 ```
 
-- **Gemini Flash** classifies each fragment. The function asks for **schema-constrained JSON** (`responseSchema`) so the UI can render results reliably.
+- **Gemini Flash** (`gemini-flash-latest`) classifies each fragment. The function asks for **schema-constrained JSON** (`responseSchema`) so the UI can render results reliably.
 - **Cloud Functions** hold the logic and the API key (stored in Secret Manager, never in the repo).
 - **Firestore** holds workstreams, items and classified fragments. Security rules block all direct client access, so everything goes through the functions.
 - **Firebase Hosting** serves the UI and routes `/api/*` to the functions.
@@ -102,6 +102,7 @@ Connecting to company mail and chat usually means a long IT security review. Pas
 - **Ask Åttapus**: one question box (no chat thread, nothing stored) that Gemini answers only from what is already tracked, with a *Based on* list showing which items it used. It also writes status updates on request.
 - **Gate review one-pager**: pick two dates (and optionally one workstream) and get a single page with an executive summary, an overall and per-workstream RAG, progress bars, what is in progress, what is at risk and what needs a decision. Counts and RAG come straight from the data (rules shown on the page); Gemini only writes the summary. Print / save as PDF uses the browser's print, and the page can be copied as text or markdown. Nothing is stored.
 - **Add to Google Calendar**: open items get a prefilled Google Calendar link (due date as an all-day event, or a 9:00 nudge tomorrow if there is no deadline). It is a link, not a sync: no sign-in and nothing stored.
+- **Delete dismissed messages**: a message you dismissed stays in History until you delete it (one at a time, or all dismissed at once); deleting removes its stored text for good. Confirmed items stay on record.
 - Workstreams view with shortcuts into the Status tab and History
 - Light and dark themes
 
@@ -109,7 +110,18 @@ Connecting to company mail and chat usually means a long IT security review. Pas
 - Live Outlook / Teams / SharePoint connectors (intentionally out of scope)
 - PowerPoint export (the gate review prints to PDF or copies as text or markdown)
 - Two-way Google Calendar sync (the Add to calendar link is one-way and needs no sign-in)
+- Cross-device sync: each browser has its own private sandbox (no sign-in), so a phone and a laptop do not share items
 - Vector retrieval for large histories (the demo history is small, so the full history goes into the prompt)
+
+## Roadmap
+
+**Next: connect where the work lives, and carry your memory across devices.** None of this is built yet.
+
+1. **Sign-in and cross-device sync**: one memory across phone, tablet and laptop (today each browser keeps its own private sandbox).
+2. **Live Outlook, Teams and SharePoint connections**: read-only first, so messages arrive without pasting, once a company's security review allows it. Paste stays as the no-approval way in.
+3. **Two-way Google Calendar sync**: reminders that update when an item changes (today "Add to Google Calendar" is a one-way link).
+4. **PowerPoint export** of the gate review for steering-committee decks (today it prints to PDF or copies as text).
+5. **Vector retrieval** for large histories, so the right past items are found without sending the whole history to the model.
 
 ## Project structure
 
