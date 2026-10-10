@@ -426,6 +426,7 @@ exports.getState = onRequest(async (req, res) => {
 //   confirm -> the fragment becomes part of the visitor's memory (a new item
 //              on record); a confirmed contradiction reopens the closed item.
 //   dismiss -> the fragment is set aside.
+//   delete  -> a dismissed fragment is removed for good.
 // ---------------------------------------------------------------------
 exports.resolveFragment = onRequest(async (req, res) => {
   cors(req, res, async () => {
@@ -435,7 +436,7 @@ exports.resolveFragment = onRequest(async (req, res) => {
       }
       const { id, action } = req.body || {};
       const sid = getSid((req.body || {}).sid);
-      if (!DOC_RE.test(String(id || "")) || !["confirm", "dismiss"].includes(action)) {
+      if (!DOC_RE.test(String(id || "")) || !["confirm", "dismiss", "delete"].includes(action)) {
         return res.status(400).json({ ok: false, error: "Bad request" });
       }
       // Optional human corrections made before confirming: the proposed action
@@ -465,6 +466,13 @@ exports.resolveFragment = onRequest(async (req, res) => {
       if (!snap.exists) return res.status(404).json({ ok: false, error: "Not found" });
       const f = snap.data();
       if (f.sessionId !== sid) return res.status(403).json({ ok: false, error: "Not yours" });
+      // delete: permanently removes a message the visitor dismissed (including its
+      // stored text). Only dismissed messages can be deleted; confirmed ones are on record.
+      if (action === "delete") {
+        if (f.status !== "dismissed") return res.status(409).json({ ok: false, error: "Only dismissed messages can be deleted" });
+        await ref.delete();
+        return res.status(200).json({ ok: true, deleted: true });
+      }
       if (f.status !== "pending") {
         return res.status(200).json({ ok: true, status: f.status, already: true });
       }

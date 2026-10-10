@@ -985,6 +985,21 @@ async function resolve(id, confirmed) {
   }
 }
 
+async function deleteDismissed(ids) {
+  const ok = [];
+  for (const id of ids) {
+    try {
+      const r = await fetch('/api/resolve', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ sid, id, action:'delete' }) });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok && d.ok) ok.push(id);
+    } catch (e) {}
+  }
+  history = history.filter(f => !ok.includes(f.id));
+  ok.forEach(id => openRows.delete('h-' + id));
+  renderAll();
+  toast(ok.length === ids.length ? (ok.length === 1 ? 'Deleted' : 'Deleted ' + ok.length + ' messages') : 'Could not delete everything — please try again');
+}
+
 function retry(errItem) {
   const idx = queue.findIndex(q => q.id === errItem.id);
   if (idx < 0) return;
@@ -1326,6 +1341,11 @@ function renderStatus() {
   });
   root.append(chips);
   const shown = outs.filter(x => match(x, histFilter));
+  if (histFilter === 'dismissed' && shown.length > 1) {
+    const all = h('button', 'b-ghost', 'Delete all ' + shown.length + ' dismissed');
+    all.onclick = () => deleteDismissed(shown.map(x => x.f.id));
+    root.append(all);
+  }
   if (!shown.length) root.append(h('div', 'none', history.length ? 'Nothing in this filter.' : 'No messages yet. Paste something on the left to start the history.'));
   shown.forEach(({ f, o }) => {
     const key = 'h-' + f.id, row = h('div', 'hist-row', null, { id: key }), top = h('div', 'row-top'), main = h('div', 'row-main'), tags = h('div', 'row-tags');
@@ -1339,6 +1359,7 @@ function renderStatus() {
     if (o.k === 'pending') hb('Review now', () => showReview(f.id), 'b-ok');
     else if (o.k === 'open' && li) { hb('Go to action', () => showAction(li)); hb(doneLabel(li), () => setDone(li.id, true), 'b-ok'); }
     else if (o.k === 'done' && li) hb('Undo', () => setDone(li.id, false));
+    else if (o.k === 'dismissed') hb('Delete', () => deleteDismissed([f.id]));
     if (acts.children.length) row.append(acts);
     if (openRows.has(key)) {
       const dd = h('div', 'row-detail');
