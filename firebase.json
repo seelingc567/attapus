@@ -38,6 +38,10 @@
       {
         "source": "/api/knowledge",
         "function": "saveKnowledge"
+      },
+      {
+        "source": "/api/project",
+        "function": "saveProject"
       }
     ]
   },

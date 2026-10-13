@@ -205,6 +205,34 @@
   .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; margin-top:12px; }
   .box { background:var(--surface-2); border:1px solid var(--line); border-radius:12px; padding:12px; }
   .box h4 { margin:0 0 8px; font-size:12px; color:var(--muted); font-weight:700; }
+  .newp { background:var(--card); border:1px dashed var(--line); border-radius:14px; padding:12px; margin-bottom:14px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .newp input { flex:1 1 200px; min-width:0; }
+  .newp .np-err { flex-basis:100%; font-size:12px; color:var(--rose-text); }
+  .ws-del { margin-top:10px; }
+  .tl-ctl { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
+  .tl-ctl .grow { margin-left:auto; }
+  .tl-lane { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:12px; box-shadow:var(--shadow); }
+  .tl-head { display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
+  .tl-head h3 { font-size:14px; font-weight:800; }
+  .tl-head .grow { margin-left:auto; }
+  .tl-axis { position:relative; height:18px; margin-bottom:2px; }
+  .tl-axis span { position:absolute; top:0; transform:translateX(-50%); font-size:10.5px; color:var(--faint); white-space:nowrap; }
+  .tl-axis span:first-child { transform:none; }
+  .tl-axis span.last { transform:translateX(-100%); }
+  .tl-track { position:relative; height:34px; background:var(--surface-2); border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .tl-wk { position:absolute; top:0; bottom:0; width:1px; background:var(--line); }
+  .tl-today { position:absolute; top:0; bottom:0; width:2px; background:var(--brand); }
+  .tl-dot { position:absolute; top:50%; width:16px; height:16px; margin:-8px 0 0 -8px; border-radius:50%; border:2px solid var(--surface); padding:0; background:var(--brand); }
+  .tl-dot.open { background:var(--amber); } .tl-dot.over { background:var(--rose); } .tl-dot.done { background:var(--green); }
+  .tl-dot.closed { background:var(--surface); border-color:var(--faint); }
+  .tl-rows { margin-top:10px; display:flex; flex-direction:column; gap:2px; }
+  .tl-row { display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:9px; font-size:13px; text-align:left; background:none; border:none; width:100%; }
+  .tl-row:hover { background:var(--surface-2); }
+  .tl-row .d { font-size:11.5px; color:var(--muted); white-space:nowrap; min-width:84px; }
+  .tl-row .t { flex:1; min-width:0; overflow-wrap:anywhere; }
+  .tl-key { display:flex; gap:12px; flex-wrap:wrap; font-size:11.5px; color:var(--muted); margin:2px 0 12px; }
+  .tl-key i { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:5px; vertical-align:-1px; background:var(--brand); }
+  .tl-key i.open { background:var(--amber); } .tl-key i.over { background:var(--rose); } .tl-key i.done { background:var(--green); } .tl-key i.closed { background:var(--surface); border:2px solid var(--faint); }
   .kbox { margin-top:12px; background:var(--surface-2); border:1px solid var(--line); border-radius:12px; padding:12px; }
   .kbox h4 { margin:0 0 6px; font-size:12px; color:var(--muted); font-weight:700; display:flex; align-items:center; gap:8px; }
   .kbox .k-text { font-size:13px; line-height:1.5; white-space:pre-wrap; color:var(--text); }
@@ -387,6 +415,8 @@
     .lens-bar > .btn { flex:none; }
   }
   @media (max-width: 480px) {
+    .lens-tabs { overflow-x:auto; }
+    .lens-tab { white-space:nowrap; }
     .lens-tab { padding:8px 9px; gap:5px; font-size:12.5px; }
     .lens-tab > i { display:none; }
   }
@@ -403,7 +433,7 @@
     </div>
   </div>
   <div class="head-right">
-    <div class="pill"><span class="dot"></span><span>Gemini memory active</span><span style="opacity:.4">|</span><span>3 workstreams</span></div>
+    <div class="pill"><span class="dot"></span><span>Gemini memory active</span><span style="opacity:.4">|</span><span id="pillWs">3 workstreams</span></div>
     <button class="btn" onclick="openAsk()" aria-label="Ask Åttapus"><i class="fa-solid fa-wand-magic-sparkles"></i><span class="lbl">Ask Åttapus</span></button>
     <button class="btn icon-btn" id="themeBtn" onclick="toggleTheme()" aria-label="Toggle light or dark mode"><i class="fa-solid fa-sun"></i></button>
     <div class="avatar" title="Seeling">S</div>
@@ -479,6 +509,7 @@
         <button class="lens-tab active" id="lt-today" onclick="lens('today')"><i class="fa-solid fa-compass"></i>Today <span class="count mono" id="badge">0</span></button>
         <button class="lens-tab" id="lt-ws" onclick="lens('ws')"><i class="fa-solid fa-folder-tree"></i>Workstreams</button>
         <button class="lens-tab" id="lt-status" onclick="lens('status')"><i class="fa-solid fa-chart-simple"></i>Status</button>
+        <button class="lens-tab" id="lt-time" onclick="lens('time')"><i class="fa-solid fa-calendar-days"></i>Timeline</button>
       </div>
       <button class="btn" onclick="toggleBrief()"><i class="fa-solid fa-mug-hot"></i><span class="lbl" id="briefLbl">Morning brief</span></button>
     </div>
@@ -506,7 +537,7 @@
       <div id="changesRoot"></div>
 
       <div class="stats">
-        <div class="stat"><div class="n" style="color:var(--brand-hi)">3</div><div><small>Active workstreams</small><b>Construction · Retail · Marketing</b></div></div>
+        <div class="stat"><div class="n" style="color:var(--brand-hi)" id="statWsN">3</div><div><small>Active workstreams</small><b id="statWsT">Construction · Retail · Marketing</b></div></div>
         <div class="stat"><div class="n" style="color:var(--green)" id="sTriaged">0</div><div><small>Read this session</small><b id="sTriagedT">Paste something to start</b></div></div>
         <div class="stat"><div class="n" style="color:var(--amber)" id="sCaught">0</div><div><small>Caught before it was late</small><b id="sCaughtT">Nothing flagged yet</b></div></div>
       </div>
@@ -519,9 +550,24 @@
           <h2><i class="fa-solid fa-layer-group"></i> Workstreams</h2>
           <p>Structured memory kept up to date from everything you paste in.</p>
         </div>
-        <button class="btn" onclick="openAsk()"><i class="fa-solid fa-wand-magic-sparkles"></i><span>Ask Åttapus</span></button>
+        <div style="display:flex;gap:8px">
+          <button class="btn" id="newProjBtn" onclick="toggleNewProject()"><i class="fa-solid fa-plus"></i><span>New project</span></button>
+          <button class="btn" onclick="openAsk()"><i class="fa-solid fa-wand-magic-sparkles"></i><span>Ask Åttapus</span></button>
+        </div>
       </div>
+      <div id="newProjRoot"></div>
       <div id="wsList"></div>
+    </section>
+
+    <!-- TIMELINE -->
+    <section class="panel" id="p-time">
+      <div class="sec-head">
+        <div>
+          <h2><i class="fa-solid fa-calendar-days"></i> Timeline</h2>
+          <p>Read-only. Deadlines, completions and closed decisions per project, from the items on record.</p>
+        </div>
+      </div>
+      <div id="timeRoot"></div>
     </section>
 
     <!-- STATUS -->
@@ -593,6 +639,17 @@ const WORKSTREAMS = {
   marketing:    { name:'Marketing Campaign',  icon:'fa-bullhorn',      tone:'brand', seeded:[['Influencer contract','due tomorrow']] }
 };
 const WS_ORDER = ['construction','retail','marketing'];
+const BASE_KEYS = ['construction','retail','marketing'];
+const CUSTOM_ICONS = ['fa-diagram-project','fa-handshake','fa-rocket','fa-flag','fa-lightbulb'];
+const CUSTOM_TONES = ['green','rose','brand','cyan','amber'];
+// Rebuild the project list: the three shared projects plus this visitor's own.
+function syncWorkstreams(list) {
+  Object.keys(WORKSTREAMS).forEach(k => { if (!BASE_KEYS.includes(k)) delete WORKSTREAMS[k]; });
+  WS_ORDER.length = 0; BASE_KEYS.forEach(k => WS_ORDER.push(k));
+  (list || []).filter(w => w.custom && /^[a-z0-9_-]{2,40}$/.test(w.id))
+    .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))
+    .forEach((w, n) => { WORKSTREAMS[w.id] = { name: w.name, icon: CUSTOM_ICONS[n % 5], tone: CUSTOM_TONES[n % 5], seeded: [], custom: true }; WS_ORDER.push(w.id); });
+}
 
 const PRESETS = {
   lands:
@@ -677,7 +734,7 @@ function preset(key, el) {
   $('input').value = PRESETS[key];
 }
 function lens(which) {
-  [['today', 'lt-today', 'p-today'], ['ws', 'lt-ws', 'p-ws'], ['status', 'lt-status', 'p-status']].forEach(([k, t, pn]) => {
+  [['today', 'lt-today', 'p-today'], ['ws', 'lt-ws', 'p-ws'], ['status', 'lt-status', 'p-status'], ['time', 'lt-time', 'p-time']].forEach(([k, t, pn]) => {
     $(t).classList.toggle('active', which === k);
     $(pn).classList.toggle('on', which === k);
   });
@@ -702,6 +759,7 @@ function toast(msg) {
 /* ============ Mapping backend result → card ============ */
 function wsKey(id) {
   const v = String(id || '').toLowerCase();
+  if (WORKSTREAMS[v]) return v;
   if (v.includes('construct')) return 'construction';
   if (v.includes('retail'))    return 'retail';
   if (v.includes('market'))    return 'marketing';
@@ -1035,7 +1093,11 @@ function renderAll() {
   $('sCaught').textContent = caught.length;
   $('sCaughtT').textContent = caught.length ? caught[0].title : 'Nothing flagged yet';
 
+  $('pillWs').textContent = WS_ORDER.length + ' workstreams';
+  $('statWsN').textContent = WS_ORDER.length;
+  $('statWsT').textContent = WS_ORDER.map(k => WORKSTREAMS[k].name).join(' · ');
   renderWorkstreams();
+  renderTimeline();
   renderBrief();
   renderStatus();
   renderChanges();
@@ -1103,7 +1165,7 @@ function knowledgeBox(key, name) {
     const save = h('button', 'b-ok', 'Save'); save.id = 'k-save-' + key; save.onclick = () => saveKnowledge(key);
     const cancel = h('button', 'b-ghost', 'Cancel'); cancel.onclick = () => { delete kEdit[key]; renderWorkstreams(); };
     const ex = h('button', 'b-ghost', 'Fill with an example'); ex.onclick = () => { kEdit[key] = K_EXAMPLES[key] || ''; renderWorkstreams(); };
-    acts.append(save, cancel, ex, cnt); box.append(acts);
+    acts.append(save, cancel); if (K_EXAMPLES[key]) acts.append(ex); acts.append(cnt); box.append(acts);
     return box;
   }
   if (knowledge[key]) {
@@ -1116,6 +1178,47 @@ function knowledgeBox(key, name) {
     acts.append(add); box.append(acts);
   }
   return box;
+}
+
+let newProj = false, projBusy = false;
+function toggleNewProject() { newProj = !newProj; renderNewProject(); if (newProj) setTimeout(() => { const t = $('npName'); if (t) t.focus(); }, 30); }
+function renderNewProject() {
+  const root = $('newProjRoot'); root.replaceChildren();
+  $('newProjBtn').disabled = false;
+  if (!newProj) return;
+  const box = h('div', 'newp');
+  const inp = h('input'); inp.id = 'npName'; inp.maxLength = 40; inp.placeholder = 'Project name, e.g. Partnership Deal'; inp.setAttribute('aria-label', 'New project name');
+  const add = h('button', 'b-ok', 'Add project'), cancel = h('button', 'b-ghost', 'Cancel');
+  const err = h('div', 'np-err'); err.id = 'npErr';
+  add.onclick = () => createProject(inp.value, add, err);
+  inp.onkeydown = e => { if (e.key === 'Enter') add.click(); };
+  cancel.onclick = () => { newProj = false; renderNewProject(); };
+  box.append(inp, add, cancel, err); root.append(box);
+}
+async function createProject(name, btn, errEl) {
+  name = name.trim().replace(/\s+/g, ' ');
+  if (name.length < 2) { errEl.textContent = 'Give it a name of at least 2 characters.'; return; }
+  if (projBusy) return; projBusy = true; btn.disabled = true; errEl.textContent = '';
+  try {
+    const resp = await fetch('/api/project', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ sid, name }) });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.ok) throw new Error(data.error || ('HTTP ' + resp.status));
+    newProj = false; renderNewProject();
+    await loadState(); toast('Project added: ' + name);
+  } catch (e) { errEl.textContent = e.message; btn.disabled = false; }
+  finally { projBusy = false; }
+}
+async function deleteProject(key) {
+  const w = WORKSTREAMS[key]; if (!w || !w.custom) return;
+  if (!confirm('Delete "' + w.name + '" and everything you captured in it? This cannot be undone.')) return;
+  try {
+    const resp = await fetch('/api/project', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ sid, action:'delete', id: key }) });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.ok) throw new Error(data.error || ('HTTP ' + resp.status));
+    if (wsFilter === key) wsFilter = 'all'; if (gateWs === key) gateWs = 'all';
+    delete knowledge[key]; delete kEdit[key];
+    await loadState(); toast('Project deleted');
+  } catch (e) { toast('Could not delete: ' + e.message); }
 }
 
 function renderWorkstreams() {
@@ -1156,8 +1259,86 @@ function renderWorkstreams() {
     else recent.append(h('div', 'none', 'Nothing captured yet'));
     grid.append(onRecord, recent);
     card.append(grid);
+    if (w.custom) { const del = h('button', 'b-ghost ws-del', 'Delete this project'); del.onclick = () => deleteProject(key); card.append(del); }
     list.append(card);
   });
+}
+
+/* ============ Timeline (read-only) ============ */
+let tlSpan = 28;                         // days shown: 28 or 56
+const TL_BACK = { 28: 14, 56: 14 };
+function tlDayStart(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
+function tlDate(d) { return new Date(d).toLocaleDateString('en-SG', { day:'numeric', month:'short' }); }
+function renderTimeline() {
+  const root = $('timeRoot'); if (!root) return; root.replaceChildren();
+  if (!items) { root.append(h('div', 'none', 'The timeline needs the items on record. Reload to try again.')); return; }
+  const today = tlDayStart(new Date()), from = new Date(today.getTime() - TL_BACK[tlSpan] * 864e5), to = new Date(from.getTime() + tlSpan * 864e5);
+  const pos = d => (new Date(d) - from) / (to - from) * 100;
+  const ctl = h('div', 'tl-ctl');
+  [[28, '4 weeks'], [56, '8 weeks']].forEach(([n, l]) => { const b = h('button', 'chip-f' + (tlSpan === n ? ' active' : ''), l); b.onclick = () => { tlSpan = n; renderTimeline(); }; ctl.append(b); });
+  const all = h('button', 'btn grow'); all.append(h('i', 'fa-solid fa-flag-checkered'), document.createTextNode(' Gate review for this window'));
+  all.onclick = () => openGateFor('all', from, today);
+  ctl.append(all); root.append(ctl);
+  const key = h('div', 'tl-key');
+  [['open', 'Open, due'], ['over', 'Overdue'], ['done', 'Done'], ['closed', 'Closed decision']].forEach(([c, l]) => { const s = h('span'); s.append(h('i', c), document.createTextNode(l)); key.append(s); });
+  root.append(key);
+
+  const ticks = [];
+  for (let t = new Date(from); t < to; t = new Date(t.getTime() + 7 * 864e5)) ticks.push(new Date(t));
+
+  WS_ORDER.forEach(k => {
+    const w = WORKSTREAMS[k], rows = [];
+    let undated = 0, outside = 0;
+    items.filter(i => wsKey(i.workstreamId) === k).forEach(i => {
+      let when = null, cls = '', label = '';
+      if (i.status === 'open') {
+        if (!i.dueDate) { undated++; return; }
+        when = new Date(i.dueDate); cls = when < today ? 'over' : 'open'; label = (cls === 'over' ? 'Overdue · ' : 'Due · ') + tlDate(when);
+      } else if (i.status === 'done' && i.completedAt) { when = new Date(i.completedAt); cls = 'done'; label = 'Done · ' + tlDate(when); }
+      else if (i.status === 'closed' && i.loggedAt) { when = new Date(i.loggedAt); cls = 'closed'; label = 'Closed · ' + tlDate(when); }
+      else return;
+      if (when < from || when >= to) { outside++; return; }
+      rows.push({ i, when, cls, label });
+    });
+    rows.sort((a, b) => a.when - b.when);
+
+    const lane = h('div', 'tl-lane'), hd = h('div', 'tl-head'), ico = h('div', 'ws-ico t-' + w.tone); ico.style.cssText = 'width:28px;height:28px;font-size:13px';
+    ico.append(h('i', 'fa-solid ' + w.icon)); hd.append(ico, h('h3', null, w.name));
+    const gb = h('button', 'b-ghost grow', 'Gate review'); gb.onclick = () => openGateFor(k, from, today); hd.append(gb);
+    lane.append(hd);
+
+    const axis = h('div', 'tl-axis');
+    ticks.forEach((t, n) => { const sp = h('span', n === ticks.length - 1 && pos(t) > 88 ? 'last' : '', tlDate(t)); sp.style.left = pos(t) + '%'; axis.append(sp); });
+    lane.append(axis);
+    const track = h('div', 'tl-track');
+    ticks.forEach(t => { const g = h('div', 'tl-wk'); g.style.left = pos(t) + '%'; track.append(g); });
+    const td = h('div', 'tl-today'); td.style.left = pos(today) + '%'; td.title = 'Today'; track.append(td);
+    rows.forEach(r => {
+      const d = h('button', 'tl-dot ' + r.cls); d.style.left = Math.min(98, Math.max(2, pos(r.when))) + '%';
+      d.title = r.i.title + ' · ' + r.label; d.setAttribute('aria-label', r.i.title + ', ' + r.label);
+      d.onclick = () => (r.i.status === 'open' ? showAction(r.i) : null);
+      track.append(d);
+    });
+    lane.append(track);
+
+    const list = h('div', 'tl-rows');
+    if (!rows.length) list.append(h('div', 'none', 'Nothing dated in this window yet. Items with a deadline appear here.'));
+    rows.forEach(r => {
+      const row = h('button', 'tl-row'); row.append(h('span', 'd mono', r.label), h('span', 't', r.i.title));
+      if (r.i.status === 'open') row.onclick = () => showAction(r.i);
+      list.append(row);
+    });
+    const notes = [];
+    if (undated) notes.push(undated + ' open item' + (undated === 1 ? '' : 's') + ' with no deadline');
+    if (outside) notes.push(outside + ' outside this window');
+    if (notes.length) list.append(h('div', 'none', notes.join(' · ')));
+    lane.append(list);
+    root.append(lane);
+  });
+}
+function openGateFor(k, from, to) {
+  gateWs = k; openAsk('gate');
+  setRange(ymdLocal(from), ymdLocal(to)); gateInit();
 }
 
 /* ============ Items on record, morning brief, session restore ============ */
@@ -1210,6 +1391,7 @@ async function loadState() {
     const resp = await fetch('/api/state?sid=' + encodeURIComponent(sid));
     const data = await resp.json();
     if (!resp.ok || !data.ok) throw new Error(data.error || 'state');
+    syncWorkstreams(data.workstreams);
     items = data.items; knowledge = data.knowledge || {};
     const frs = data.fragments.map(fragToItem).reverse();      // newest first
     history = frs.slice();
@@ -1221,7 +1403,7 @@ async function loadState() {
 function resetSession() {
   sid = newSid();
   try { localStorage.setItem('attapus-sid', sid); } catch (e) {}
-  queue = []; captured = []; history = []; knowledge = {}; Object.keys(kEdit).forEach(k => delete kEdit[k]); wsFilter = 'all'; $('input').value = ''; clearShot();
+  syncWorkstreams(null); newProj = false; queue = []; captured = []; history = []; knowledge = {}; Object.keys(kEdit).forEach(k => delete kEdit[k]); wsFilter = 'all'; $('input').value = ''; clearShot();
   loadState();
   toast('Started a fresh session');
 }
@@ -1532,7 +1714,7 @@ function gateInit() {
     setRange(back(14), ymdLocal(today));
   }
   const wsBox = $('gateWs'); wsBox.replaceChildren();
-  [['all', 'All three'], ...WS_ORDER.map(k => [k, WORKSTREAMS[k].name])].forEach(([k, l]) => {
+  [['all', WS_ORDER.length === 3 ? 'All three' : 'All projects'], ...WS_ORDER.map(k => [k, WORKSTREAMS[k].name])].forEach(([k, l]) => {
     const b = h('button', 'chip-f' + (gateWs === k ? ' active' : ''), l); b.onclick = () => { gateWs = k; gateInit(); }; wsBox.append(b);
   });
 }

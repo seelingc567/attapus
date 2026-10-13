@@ -74,6 +74,7 @@ The seeded demo history is shared, but everything a visitor does on top of it (t
 | `POST /api/complete` | Mark an open item done (or undo) |
 | `POST /api/ask` | Answers one question from the visitor's tracked items and message summaries (raw pasted text is never sent) |
 | `POST /api/gate` | Builds a gate review for a date range: counts, progress and RAG are computed from the data; Gemini writes only the short executive summary from titles and counts (a plain-text fallback is used if Gemini is unavailable) |
+| `POST /api/project` | Adds one of the visitor's own projects (max 5), or deletes it together with the visitor's messages, items and knowledge for it |
 | `POST /api/knowledge` | Saves (or clears, when empty) the project knowledge brief for one workstream in the visitor's sandbox |
 | `GET /api/state` | Restores the visitor's queue and the items on record |
 | `GET /api/seed` | (Re)loads the demo data; `?reset=1` also wipes every visitor sandbox |
@@ -105,6 +106,8 @@ Connecting to company mail and chat usually means a long IT security review. Pas
 - **Add to Google Calendar**: open items get a prefilled Google Calendar link (due date as an all-day event, or a 9:00 nudge tomorrow if there is no deadline). It is a link, not a sync: no sign-in and nothing stored.
 - **Delete dismissed messages**: a message you dismissed stays in History until you delete it (one at a time, or all dismissed at once); deleting removes its stored text for good. Confirmed items stay on record.
 - **Project knowledge**: on the Workstreams tab, add a short brief (up to 800 characters: goal, people, rules) to any project. Gemini reads it with every message and question for that project, so it can judge a message against the project's rules (for example, who must approve a change) and mention the rule in the suggested action. It is optional, per project, editable or clearable any time, and stored in the visitor's own sandbox. The demo shows it on one project; the sample data has none until you add it.
+- **New project**: add your own project from the Workstreams tab (up to 5 per visitor, private to your browser's workspace). Gemini sees its name when it sorts messages, it can have its own project knowledge, and deleting it also deletes what you captured in it. The three sample projects are shared and cannot be deleted.
+- **Timeline (read-only)**: a tab with one lane per project on a date axis (4 or 8 weeks). Dots show open deadlines, overdue items, completions and closed decisions, with the list underneath; a *Gate review* button per project (or for all) opens the gate review with that window filled in. It is built from the items on record: there are no editable milestones or gate dates yet.
 - Workstreams view with shortcuts into the Status tab and History
 - Light and dark themes
 
@@ -149,18 +152,19 @@ User manual: [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
 1. **Sign-in and cross-device sync**: one memory across phone, tablet and laptop (today each browser keeps its own private sandbox).
 2. **Live Outlook, Teams and SharePoint connections**: read-only first, so messages arrive without pasting, once a company's security review allows it. Paste stays as the no-approval way in.
 3. **Two-way Google Calendar sync**: reminders that update when an item changes (today "Add to Google Calendar" is a one-way link).
-4. **PowerPoint export** of the gate review for steering-committee decks (today it prints to PDF or copies as text).
-5. **Vector retrieval** for large histories, so the right past items are found without sending the whole history to the model.
+4. **Milestones and gate dates you set yourself**, shown on the Timeline (today it is read-only and uses item deadlines), plus shared projects for a team.
+5. **PowerPoint export** of the gate review for steering-committee decks (today it prints to PDF or copies as text).
+6. **Vector retrieval** for large histories, so the right past items are found without sending the whole history to the model.
 
 ## Project structure
 
 ```
 public/index.html        Web UI (single file, no build step)
-functions/index.js       Cloud Functions (seed, classify, state, resolve, complete, knowledge, ask, gate)
+functions/index.js       Cloud Functions (seed, classify, state, resolve, complete, knowledge, project, ask, gate)
 functions/gate.js        Gate review logic: date ranges, counts, RAG (no Firebase dependency)
 functions/limits.js      Usage limits for the Gemini endpoints
 docs/USER_GUIDE.md       User manual
-firebase.json            Hosting rewrites: /api/classify, /api/seed, /api/state, /api/resolve, /api/complete, /api/knowledge, /api/ask, /api/gate
+firebase.json            Hosting rewrites: /api/classify, /api/seed, /api/state, /api/resolve, /api/complete, /api/knowledge, /api/project, /api/ask, /api/gate
 firestore.rules          Locks Firestore to server-side access only
 ```
 

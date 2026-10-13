@@ -41,6 +41,14 @@ Each card shows a label, the workstream, a one-line summary, the original text, 
 - A dismissed message stays in History until you delete it: tap **Delete** on the row, or use the **Dismissed** filter and **Delete all**. Deleting removes its stored text for good. Confirmed items stay on record.
 - Open items have an **Add to Google Calendar** link: a prefilled event on the due date, or a 9:00 reminder tomorrow if there is no deadline. It is a one-way link; nothing is synced.
 
+## Add your own project
+
+On the **Workstreams** tab, tap **New project**, type a name and tap **Add project**. You can have up to 5 of your own. Åttapus can then sort messages into it, and you can give it project knowledge. A project you added has **Delete this project** at the bottom of its card, which also deletes what you captured in it. The three sample projects are shared and cannot be deleted.
+
+## Timeline
+
+The **Timeline** tab is a read-only picture of dates. Each project has a lane on a date axis (choose 4 or 8 weeks; the purple line is today). Dots show open items by deadline (amber), overdue items (red), completed items (green) and closed decisions (hollow). The list under each lane gives the same items with dates; tap an open one to jump to it. Use **Gate review** on a lane, or **Gate review for this window** at the top, to open the gate review with that range already filled in. Items with no deadline are counted under the lane. Milestones and gate dates cannot be added yet.
+
 ## Project knowledge (optional)
 
 Each project card on the **Workstreams** tab has a **Project knowledge** box. Use it to tell Åttapus what it cannot guess from messages alone: the project's goal, who is involved, and any rules (for example, "Dana approves every tile change").

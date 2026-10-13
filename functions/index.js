@@ -57,7 +57,11 @@ async function loadContext(sid) {
     const k = d.data();
     if (k && k.workstreamId && typeof k.text === "string" && k.text.trim()) knowledge[k.workstreamId] = k.text;
   });
-  const workstreams = wsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  // Shared (seeded) workstreams plus this visitor's own projects.
+  const workstreams = wsSnap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .filter((w) => !w.sessionId || w.sessionId === sid)
+    .map(({ sessionId, createdAt, ...w }) => ({ ...w, custom: !!sessionId, createdAt: iso(createdAt) }));
   // A visitor can mark a shared (seeded) item done without changing it for anyone
   // else: that choice is stored as a per-visitor override.
   const overrides = new Map(ovSnap.docs.map((d) => [d.data().itemId, d.data()]));
@@ -87,6 +91,9 @@ async function loadContext(sid) {
   });
   return { workstreams, items, knowledge };
 }
+
+// A workstream is usable by a visitor if it is a shared one or their own project.
+const wsUsable = (snap, sid) => snap && snap.exists && (!snap.data().sessionId || snap.data().sessionId === sid);
 
 // Prompt block for the project knowledge a visitor wrote (empty when there is none).
 function knowledgeBlock(knowledge, label) {
@@ -139,9 +146,9 @@ exports.seedDemoData = onRequest(async (req, res) => {
       );
 
       const workstreams = [
-        { id: "construction", name: "Construction", color: "2B5C85" },
-        { id: "retail", name: "Retail", color: "C08A2E" },
-        { id: "marketing", name: "Marketing Campaign", color: "3E8E5A" },
+        { id: "construction", name: "Construction", color: "2B5C85", sessionId: null },
+        { id: "retail", name: "Retail", color: "C08A2E", sessionId: null },
+        { id: "marketing", name: "Marketing Campaign", color: "3E8E5A", sessionId: null },
       ];
 
       const items = [
@@ -178,13 +185,15 @@ exports.seedDemoData = onRequest(async (req, res) => {
       // items and saved fragments). Handy before recording a demo take.
       let removed = null;
       if (req.query.reset === "1") {
-        const [itemsSnap, fragSnap, ovSnap, knSnap] = await Promise.all([
+        const [itemsSnap, fragSnap, ovSnap, knSnap, wsAll] = await Promise.all([
           db.collection("items").get(),
           db.collection("fragments").get(),
           db.collection("overrides").get(),
           db.collection("knowledge").get(),
+          db.collection("workstreams").get(),
         ]);
         const refs = [
+          ...wsAll.docs.filter((d) => d.data().sessionId).map((d) => d.ref),
           ...itemsSnap.docs.filter((d) => d.data().sessionId).map((d) => d.ref),
           ...fragSnap.docs.map((d) => d.ref),
           ...ovSnap.docs.map((d) => d.ref),
@@ -472,7 +481,7 @@ exports.resolveFragment = onRequest(async (req, res) => {
         if (edits.workstreamId !== undefined) {
           const w = String(edits.workstreamId);
           const wsDoc = DOC_RE.test(w) || /^[a-z0-9_-]{2,40}$/.test(w) ? await db.collection("workstreams").doc(w).get() : null;
-          if (!wsDoc || !wsDoc.exists) {
+          if (!wsUsable(wsDoc, sid)) {
             return res.status(400).json({ ok: false, error: "Unknown workstream" });
           }
           editedWs = w;
@@ -647,7 +656,7 @@ exports.saveKnowledge = onRequest(async (req, res) => {
         return res.status(400).json({ ok: false, error: "Keep it under " + MAX_KNOWLEDGE + " characters" });
       }
       const wsDoc = await db.collection("workstreams").doc(wsId).get();
-      if (!wsDoc.exists) return res.status(400).json({ ok: false, error: "Unknown workstream" });
+      if (!wsUsable(wsDoc, sid)) return res.status(400).json({ ok: false, error: "Unknown workstream" });
       const ref = db.collection("knowledge").doc(sid + "__" + wsId);
       if (!text) {
         await ref.delete();
@@ -657,6 +666,66 @@ exports.saveKnowledge = onRequest(async (req, res) => {
       res.status(200).json({ ok: true, workstreamId: wsId, text });
     } catch (err) {
       logger.error("saveKnowledge failed", err);
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+});
+
+// ---------------------------------------------------------------------
+// saveProject: a visitor adds (or removes) their own project. It lives in their
+// sandbox only: shared seeded workstreams are never touched, and a visitor can
+// have at most MAX_PROJECTS of their own. Deleting a project also deletes the
+// visitor's own messages, items and knowledge for it.
+// ---------------------------------------------------------------------
+const MAX_PROJECTS = 5;
+const PROJECT_NAME_RE = /^[\p{L}\p{N} &'().,_\/-]{2,40}$/u;
+exports.saveProject = onRequest(async (req, res) => {
+  cors(req, res, async () => {
+    try {
+      if (req.method !== "POST") {
+        return res.status(405).json({ ok: false, error: "Use POST" });
+      }
+      const body = req.body || {};
+      const sid = getSid(body.sid);
+      if (sid === "anon") return res.status(400).json({ ok: false, error: "Bad request" });
+      const wsSnap = await db.collection("workstreams").get();
+      const visible = wsSnap.docs.filter((d) => !d.data().sessionId || d.data().sessionId === sid);
+
+      if (body.action === "delete") {
+        const id = String(body.id || "");
+        const doc = visible.find((d) => d.id === id);
+        if (!doc || !doc.data().sessionId) return res.status(404).json({ ok: false, error: "Not found" });
+        const [itemsSnap, fragSnap] = await Promise.all([
+          db.collection("items").where("sessionId", "==", sid).get(),
+          db.collection("fragments").where("sessionId", "==", sid).get(),
+        ]);
+        const refs = [
+          doc.ref,
+          db.collection("knowledge").doc(sid + "__" + id),
+          ...itemsSnap.docs.filter((d) => d.data().workstreamId === id).map((d) => d.ref),
+          ...fragSnap.docs.filter((d) => d.data().workstreamId === id).map((d) => d.ref),
+        ];
+        await deleteRefs(refs);
+        return res.status(200).json({ ok: true, id });
+      }
+
+      const name = typeof body.name === "string" ? body.name.trim().replace(/\s+/g, " ") : "";
+      if (!PROJECT_NAME_RE.test(name)) {
+        return res.status(400).json({ ok: false, error: "Use 2-40 letters, numbers or spaces for the name" });
+      }
+      if (visible.filter((d) => d.data().sessionId).length >= MAX_PROJECTS) {
+        return res.status(409).json({ ok: false, error: "The demo allows " + MAX_PROJECTS + " projects of your own. Delete one first." });
+      }
+      if (visible.some((d) => String(d.data().name).toLowerCase() === name.toLowerCase())) {
+        return res.status(409).json({ ok: false, error: "A project with that name already exists" });
+      }
+      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 20) || "project";
+      const id = "p-" + slug + "-" + Math.random().toString(36).slice(2, 6);
+      const w = { id, name, sessionId: sid, createdAt: admin.firestore.Timestamp.now() };
+      await db.collection("workstreams").doc(id).set(w);
+      res.status(200).json({ ok: true, workstream: { id, name, custom: true, createdAt: new Date().toISOString() } });
+    } catch (err) {
+      logger.error("saveProject failed", err);
       res.status(500).json({ ok: false, error: String(err) });
     }
   });
