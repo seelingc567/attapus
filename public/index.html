@@ -205,6 +205,13 @@
   .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; margin-top:12px; }
   .box { background:var(--surface-2); border:1px solid var(--line); border-radius:12px; padding:12px; }
   .box h4 { margin:0 0 8px; font-size:12px; color:var(--muted); font-weight:700; }
+  .kbox { margin-top:12px; background:var(--surface-2); border:1px solid var(--line); border-radius:12px; padding:12px; }
+  .kbox h4 { margin:0 0 6px; font-size:12px; color:var(--muted); font-weight:700; display:flex; align-items:center; gap:8px; }
+  .kbox .k-text { font-size:13px; line-height:1.5; white-space:pre-wrap; color:var(--text); }
+  .kbox .k-hint { font-size:12.5px; color:var(--muted); line-height:1.5; margin:0 0 8px; }
+  .kbox textarea { min-height:116px; font-family:'Plus Jakarta Sans', system-ui, sans-serif; font-size:13px; line-height:1.5; }
+  .kbox .k-acts { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px; }
+  .kbox .k-count { margin-left:auto; font-size:11.5px; color:var(--faint); }
   .li { font-size:12.5px; padding:6px 0; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; gap:10px; }
   .li:last-child { border-bottom:none; }
   .li span:last-child { color:var(--faint); font-size:11px; white-space:nowrap; }
@@ -1061,6 +1068,56 @@ function wsStatus(key) {
   return { cls:'t-green', label:'On track', sub:'Nothing flagged' };
 }
 
+let knowledge = {};        // project knowledge written for each workstream (this visitor's sandbox)
+const kEdit = {};          // drafts being edited, by workstream key
+const K_MAX = 800;
+const K_EXAMPLES = {
+  construction: 'Goal: hand over the east wing to the client by 30 Nov.\nPeople: Mr Lim (client) signs off finishes; Aisha is the site lead.\nRule: any change to a signed-off finish needs written client approval before anything is ordered.\nMeetings: site review every Thursday.',
+  retail: 'Goal: launch the new display units in 6 stores by December.\nPeople: Daniel (store operations) confirms quantities.\nRule: bulk quotes over 50 units need a manager\'s sign-off.',
+  marketing: 'Goal: launch the spring campaign this Friday.\nPeople: the influencer agency sends the contract terms.\nRule: no content goes live before the contract is signed.'
+};
+async function saveKnowledge(key) {
+  const text = (kEdit[key] || '').trim();
+  const b = document.getElementById('k-save-' + key); if (b) { b.disabled = true; b.textContent = 'Saving…'; }
+  try {
+    const resp = await fetch('/api/knowledge', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ sid, workstreamId: key, text }) });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.ok) throw new Error(data.error || ('HTTP ' + resp.status));
+    if (data.text) knowledge[key] = data.text; else delete knowledge[key];
+    delete kEdit[key]; renderWorkstreams();
+    toast(data.text ? 'Project knowledge saved' : 'Project knowledge cleared');
+  } catch (err) {
+    renderWorkstreams(); toast('Could not save that: ' + err.message);
+  }
+}
+function knowledgeBox(key, name) {
+  const box = h('div', 'kbox'), hd = h('h4'); hd.append(h('i', 'fa-solid fa-book-open'), document.createTextNode('Project knowledge'));
+  box.append(hd);
+  if (kEdit[key] !== undefined) {
+    box.append(h('p', 'k-hint', 'What should Åttapus know about ' + name + '? Goal, key people, rules, what done looks like. It reads this together with your messages.'));
+    const ta = h('textarea'); ta.id = 'k-' + key; ta.maxLength = K_MAX; ta.value = kEdit[key]; ta.setAttribute('aria-label', 'Project knowledge for ' + name);
+    const cnt = h('span', 'k-count', ta.value.length + ' / ' + K_MAX);
+    ta.oninput = () => { kEdit[key] = ta.value; cnt.textContent = ta.value.length + ' / ' + K_MAX; };
+    box.append(ta);
+    const acts = h('div', 'k-acts');
+    const save = h('button', 'b-ok', 'Save'); save.id = 'k-save-' + key; save.onclick = () => saveKnowledge(key);
+    const cancel = h('button', 'b-ghost', 'Cancel'); cancel.onclick = () => { delete kEdit[key]; renderWorkstreams(); };
+    const ex = h('button', 'b-ghost', 'Fill with an example'); ex.onclick = () => { kEdit[key] = K_EXAMPLES[key] || ''; renderWorkstreams(); };
+    acts.append(save, cancel, ex, cnt); box.append(acts);
+    return box;
+  }
+  if (knowledge[key]) {
+    box.append(h('div', 'k-text', knowledge[key]));
+    const acts = h('div', 'k-acts'), ed = h('button', 'b-ghost', 'Edit'); ed.onclick = () => { kEdit[key] = knowledge[key]; renderWorkstreams(); };
+    acts.append(ed); box.append(acts);
+  } else {
+    box.append(h('p', 'k-hint', 'Not set. Tell Åttapus about this project so it reads your messages with that background.'));
+    const acts = h('div', 'k-acts'), add = h('button', 'b-ghost', 'Add project knowledge'); add.onclick = () => { kEdit[key] = ''; renderWorkstreams(); setTimeout(() => { const t = document.getElementById('k-' + key); if (t) t.focus(); }, 30); };
+    acts.append(add); box.append(acts);
+  }
+  return box;
+}
+
 function renderWorkstreams() {
   const list = $('wsList'); list.replaceChildren();
   WS_ORDER.forEach(key => {
@@ -1077,6 +1134,7 @@ function renderWorkstreams() {
     tr.append(vb, h('span', 'badge mono ' + st.cls, st.label.toUpperCase()));
     top.append(id, tr);
     card.append(top);
+    card.append(knowledgeBox(key, w.name));
 
     const grid = h('div', 'grid2');
     const onRecord = h('div', 'box'); onRecord.append(h('h4', null, 'On record'));
@@ -1152,18 +1210,18 @@ async function loadState() {
     const resp = await fetch('/api/state?sid=' + encodeURIComponent(sid));
     const data = await resp.json();
     if (!resp.ok || !data.ok) throw new Error(data.error || 'state');
-    items = data.items;
+    items = data.items; knowledge = data.knowledge || {};
     const frs = data.fragments.map(fragToItem).reverse();      // newest first
     history = frs.slice();
     captured = frs.filter(f => f.status === 'pending' || f.status === 'confirmed');
     queue = frs.filter(f => f.status === 'pending');
-  } catch (e) { items = null; }
+  } catch (e) { items = null; knowledge = {}; }
   renderAll();
 }
 function resetSession() {
   sid = newSid();
   try { localStorage.setItem('attapus-sid', sid); } catch (e) {}
-  queue = []; captured = []; history = []; wsFilter = 'all'; $('input').value = ''; clearShot();
+  queue = []; captured = []; history = []; knowledge = {}; Object.keys(kEdit).forEach(k => delete kEdit[k]); wsFilter = 'all'; $('input').value = ''; clearShot();
   loadState();
   toast('Started a fresh session');
 }

@@ -74,6 +74,7 @@ The seeded demo history is shared, but everything a visitor does on top of it (t
 | `POST /api/complete` | Mark an open item done (or undo) |
 | `POST /api/ask` | Answers one question from the visitor's tracked items and message summaries (raw pasted text is never sent) |
 | `POST /api/gate` | Builds a gate review for a date range: counts, progress and RAG are computed from the data; Gemini writes only the short executive summary from titles and counts (a plain-text fallback is used if Gemini is unavailable) |
+| `POST /api/knowledge` | Saves (or clears, when empty) the project knowledge brief for one workstream in the visitor's sandbox |
 | `GET /api/state` | Restores the visitor's queue and the items on record |
 | `GET /api/seed` | (Re)loads the demo data; `?reset=1` also wipes every visitor sandbox |
 
@@ -103,6 +104,7 @@ Connecting to company mail and chat usually means a long IT security review. Pas
 - **Gate review one-pager**: pick two dates (and optionally one workstream) and get a single page with an executive summary, an overall and per-workstream RAG, progress bars, what is in progress, what is at risk and what needs a decision. Counts and RAG come straight from the data (rules shown on the page); Gemini only writes the summary. Print / save as PDF uses the browser's print, and the page can be copied as text or markdown. Nothing is stored.
 - **Add to Google Calendar**: open items get a prefilled Google Calendar link (due date as an all-day event, or a 9:00 nudge tomorrow if there is no deadline). It is a link, not a sync: no sign-in and nothing stored.
 - **Delete dismissed messages**: a message you dismissed stays in History until you delete it (one at a time, or all dismissed at once); deleting removes its stored text for good. Confirmed items stay on record.
+- **Project knowledge**: on the Workstreams tab, add a short brief (up to 800 characters: goal, people, rules) to any project. Gemini reads it with every message and question for that project, so it can judge a message against the project's rules (for example, who must approve a change) and mention the rule in the suggested action. It is optional, per project, editable or clearable any time, and stored in the visitor's own sandbox. The demo shows it on one project; the sample data has none until you add it.
 - Workstreams view with shortcuts into the Status tab and History
 - Light and dark themes
 
@@ -112,6 +114,33 @@ Connecting to company mail and chat usually means a long IT security review. Pas
 - Two-way Google Calendar sync (the Add to calendar link is one-way and needs no sign-in)
 - Cross-device sync: each browser has its own private sandbox (no sign-in), so a phone and a laptop do not share items
 - Vector retrieval for large histories (the demo history is small, so the full history goes into the prompt)
+
+## Scale and users
+
+- **Who it is for:** one person juggling several workstreams, or a small team that wants a shared memory of decisions and deadlines. Each visitor to the demo gets a private workspace in their own browser.
+- **What the public demo allows:** 40 AI calls per visitor per hour, 80 per network address per hour, and 1,500 per day across everyone. If a visit uses about 10 AI calls (an assumption), that is roughly 150 visitors a day. This is a cost cap for the demo, not a technical ceiling.
+- **How it scales:** the app runs on managed Google Cloud services (Firebase Hosting, Cloud Functions, Firestore) that grow with demand. The real limits are the Gemini quota and the budget behind it, so a production version would add per-team quotas.
+- **To production:** sign-in with a shared workspace per team (so memory follows people across devices), live Outlook / Teams / SharePoint connectors with a security review, and two-way calendar sync. See the roadmap below.
+
+User manual: [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
+
+## Longevity and the path to production
+
+**Why it should last:** work keeps spreading across more channels and projects, so the gap between what arrives and what gets logged keeps widening. Åttapus keeps a human in the loop (every change is confirmed), so a model mistake never becomes a silent error on the record.
+
+**What this build is:** a working demo on managed Google Cloud services. It is not yet hardened for thousands of users. These are the known limits and the planned fixes:
+
+| Known limit in this build | Production fix |
+|---|---|
+| Each request loads the whole `items` collection and filters in code | Sign-in, one workspace per team, and reads scoped to that workspace |
+| The whole history goes into the Gemini prompt | Retrieve only the relevant items (vector retrieval) |
+| One shared daily usage counter document | Sharded counters, with quotas per team |
+| The demo follows the `gemini-flash-latest` alias | Pin a model version and re-test it on a fixed set of examples before each upgrade |
+| Gemini API key on a separate prepaid project | Vertex AI in the same Google Cloud project, with quotas and budget alerts per team |
+| No cap on function instances | Cap instances, add monitoring and alerts |
+| No sign-in; data lives per browser | Single sign-on, audit log, retention and delete controls |
+
+**Phases:** (1) pilot with one team and tens of users, (2) growth to hundreds or thousands with the fixes above, (3) enterprise with Outlook / Teams / SharePoint connectors (read-only, after a security review). Capacity is limited by the Gemini quota and budget rather than by the hosting layer. Cost per active user has not been measured yet; a pilot is how to measure it.
 
 ## Roadmap
 
@@ -127,10 +156,11 @@ Connecting to company mail and chat usually means a long IT security review. Pas
 
 ```
 public/index.html        Web UI (single file, no build step)
-functions/index.js       Cloud Functions (seed, classify, state, resolve, complete, ask, gate)
+functions/index.js       Cloud Functions (seed, classify, state, resolve, complete, knowledge, ask, gate)
 functions/gate.js        Gate review logic: date ranges, counts, RAG (no Firebase dependency)
 functions/limits.js      Usage limits for the Gemini endpoints
-firebase.json            Hosting rewrites: /api/classify, /api/seed, /api/state, /api/resolve, /api/complete, /api/ask, /api/gate
+docs/USER_GUIDE.md       User manual
+firebase.json            Hosting rewrites: /api/classify, /api/seed, /api/state, /api/resolve, /api/complete, /api/knowledge, /api/ask, /api/gate
 firestore.rules          Locks Firestore to server-side access only
 ```
 
